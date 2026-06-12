@@ -13,6 +13,7 @@ import {
   User, KeyRound, ShieldCheck, Users, Download, Upload,
   Camera, Trash2, Plus, X, Save, Eye, EyeOff,
   CheckCircle, XCircle, AlertCircle, Shield, RefreshCw, ChevronRight, Search, Palette, Bot, Check, Loader, ChevronDown, ChevronUp, Mic, Activity, Power,
+  Navigation, MapPin, Edit2,
   Bell, Mail,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
