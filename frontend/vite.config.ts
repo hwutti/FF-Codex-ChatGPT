@@ -28,7 +28,6 @@ export default defineConfig({
           vendor:   ['react', 'react-dom', 'react-router-dom'],
           utils:    ['axios', 'date-fns'],
           pdf:      ['jspdf', 'jspdf-autotable'],
-          charts:   ['recharts'],
           icons:    ['lucide-react'],
           sanitize: ['dompurify'],
           // Leaflet in eigenen Chunk — verhindert Einbau in vendor-Chunk

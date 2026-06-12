@@ -1,7 +1,6 @@
 import ColorPicker from '../components/ColorPicker';
 import FontPicker from '../components/FontPicker';
 import PushOverviewPage from './PushOverviewPage';
-import { LineChart, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '../utils/AuthContext';
 import DiktatSection from '../components/DiktatSection';
@@ -13,7 +12,7 @@ import { sortByRank } from '../utils/rankOrder';
 import {
   User, KeyRound, ShieldCheck, Users, Download, Upload,
   Camera, Trash2, Plus, X, Save, Eye, EyeOff,
-  CheckCircle, XCircle, AlertCircle, Shield, RefreshCw, ChevronRight, Search, Palette, Bot, Check, Loader, ChevronDown, ChevronUp, Mic, Activity, Trash2, Power,
+  CheckCircle, XCircle, AlertCircle, Shield, RefreshCw, ChevronRight, Search, Palette, Bot, Check, Loader, ChevronDown, ChevronUp, Mic, Activity, Power,
   Bell, Mail,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -4475,6 +4474,102 @@ function RangeButtons({ range, setRange }: { range: string; setRange: (r: string
   );
 }
 
+type SimpleChartDatum = Record<string, number | string | null | undefined> & { time: string };
+
+function chartValue(value: unknown): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function buildLinePath(data: SimpleChartDatum[], key: string, width: number, height: number, maxValue: number) {
+  const padX = 24;
+  const padTop = 8;
+  const padBottom = 22;
+  const plotW = Math.max(1, width - padX * 2);
+  const plotH = Math.max(1, height - padTop - padBottom);
+  const max = Math.max(1, maxValue);
+
+  const points = data.map((d, i) => {
+    const x = padX + (data.length === 1 ? plotW / 2 : (i / (data.length - 1)) * plotW);
+    const y = padTop + (1 - Math.min(max, chartValue(d[key])) / max) * plotH;
+    return { x, y, label: d.time, value: chartValue(d[key]) };
+  });
+
+  return {
+    points,
+    path: points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' '),
+    baseline: padTop + plotH,
+  };
+}
+
+function SimpleLineChart({ data, valueKey, color, unit = '%', height = 120, maxValue = 100 }: {
+  data: SimpleChartDatum[];
+  valueKey: string;
+  color: string;
+  unit?: string;
+  height?: number;
+  maxValue?: number;
+}) {
+  const width = 640;
+  const { points, path } = buildLinePath(data, valueKey, width, height, maxValue);
+  const first = points[0]?.label || '';
+  const last = points[points.length - 1]?.label || '';
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-[120px]" preserveAspectRatio="none" role="img">
+      {[0, 25, 50, 75, 100].map(v => {
+        const y = 8 + (1 - v / 100) * (height - 30);
+        return <line key={v} x1={24} x2={width - 24} y1={y} y2={y} stroke="#f0f0f0" strokeDasharray="3 3" />;
+      })}
+      <path d={path} fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      {points.map((p, i) => (
+        <circle key={i} cx={p.x} cy={p.y} r={2} fill={color} vectorEffect="non-scaling-stroke">
+          <title>{`${p.label}: ${p.value}${unit}`}</title>
+        </circle>
+      ))}
+      <text x={24} y={height - 4} fill="#9ca3af" fontSize="10">{first}</text>
+      <text x={width - 24} y={height - 4} fill="#9ca3af" fontSize="10" textAnchor="end">{last}</text>
+    </svg>
+  );
+}
+
+function SimpleAreaChart({ data, totalKey, usedKey, color, height = 100 }: {
+  data: SimpleChartDatum[];
+  totalKey: string;
+  usedKey: string;
+  color: string;
+  height?: number;
+}) {
+  const width = 640;
+  const maxValue = Math.max(...data.flatMap(d => [chartValue(d[totalKey]), chartValue(d[usedKey])]), 1);
+  const used = buildLinePath(data, usedKey, width, height, maxValue);
+  const total = buildLinePath(data, totalKey, width, height, maxValue);
+  const first = used.points[0]?.label || '';
+  const last = used.points[used.points.length - 1]?.label || '';
+  const areaPath = used.points.length
+    ? `${used.path} L ${used.points[used.points.length - 1].x.toFixed(1)} ${used.baseline.toFixed(1)} L ${used.points[0].x.toFixed(1)} ${used.baseline.toFixed(1)} Z`
+    : '';
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-[100px]" preserveAspectRatio="none" role="img">
+      {[0, 25, 50, 75, 100].map(v => {
+        const y = 8 + (1 - v / 100) * (height - 30);
+        return <line key={v} x1={24} x2={width - 24} y1={y} y2={y} stroke="#f0f0f0" strokeDasharray="3 3" />;
+      })}
+      <path d={areaPath} fill={color} opacity={0.25} />
+      <path d={total.path} fill="none" stroke="#d1d5db" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      <path d={used.path} fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      {used.points.map((p, i) => (
+        <circle key={i} cx={p.x} cy={p.y} r={2} fill={color} vectorEffect="non-scaling-stroke">
+          <title>{`${p.label}: ${p.value} GB belegt`}</title>
+        </circle>
+      ))}
+      <text x={24} y={height - 4} fill="#9ca3af" fontSize="10">{first}</text>
+      <text x={width - 24} y={height - 4} fill="#9ca3af" fontSize="10" textAnchor="end">{last}</text>
+    </svg>
+  );
+}
+
 // ── CPU-Diagramm ──────────────────────────────────────────────────────────────
 function CpuChart() {
   const [data, setData] = useState<any[]>([]);
@@ -4511,15 +4606,7 @@ function CpuChart() {
       ) : data.length < 2 ? (
         <div className="h-28 flex items-center justify-center text-ink-muted text-sm">Noch zu wenige Daten</div>
       ) : (
-        <ResponsiveContainer width="100%" height={120}>
-          <LineChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-            <XAxis dataKey="time" tick={{ fontSize: 9 }} interval="preserveStartEnd" />
-            <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${v}%`} />
-            <Tooltip formatter={(v: number) => [`${v}%`, 'CPU']} />
-            <Line type="monotone" dataKey="cpu" stroke="#22c55e" strokeWidth={2} dot={false} />
-          </LineChart>
-        </ResponsiveContainer>
+        <SimpleLineChart data={data} valueKey="cpu" color="#22c55e" />
       )}
     </div>
   );
@@ -4572,15 +4659,7 @@ function RamChart() {
       ) : data.length < 2 ? (
         <div className="h-28 flex items-center justify-center text-ink-muted text-sm">Noch zu wenige Daten</div>
       ) : (
-        <ResponsiveContainer width="100%" height={120}>
-          <LineChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-            <XAxis dataKey="time" tick={{ fontSize: 9 }} interval="preserveStartEnd" />
-            <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${v}%`} />
-            <Tooltip formatter={(v: number) => [`${v}%`, 'RAM']} />
-            <Line type="monotone" dataKey="ram" stroke="#3b82f6" strokeWidth={2} dot={false} />
-          </LineChart>
-        </ResponsiveContainer>
+        <SimpleLineChart data={data} valueKey="ram" color="#3b82f6" />
       )}
     </div>
   );
@@ -4668,16 +4747,7 @@ function DiskChart() {
                 {chartData.length < 2 ? (
                   <div className="h-20 flex items-center justify-center text-ink-muted text-xs">Noch zu wenige Daten</div>
                 ) : (
-                  <ResponsiveContainer width="100%" height={100}>
-                    <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis dataKey="time" tick={{ fontSize: 9 }} interval="preserveStartEnd" />
-                      <YAxis tick={{ fontSize: 9 }} tickFormatter={(v: number) => `${v}G`} />
-                      <Tooltip formatter={(v: number, name: string) => [`${v} GB`, name === 'gesamt' ? 'Gesamt' : name === 'belegt' ? 'Belegt' : 'Frei']} />
-                      <Area type="monotone" dataKey="gesamt" stroke="#d1d5db" fill="#f3f4f6" strokeWidth={1} name="gesamt" />
-                      <Area type="monotone" dataKey="belegt" stroke={color} fill={color} fillOpacity={0.3} strokeWidth={2} name="belegt" />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                  <SimpleAreaChart data={chartData} totalKey="gesamt" usedKey="belegt" color={color} />
                 )}
               </div>
             );

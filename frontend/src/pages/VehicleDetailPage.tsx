@@ -2,11 +2,39 @@ import React, { useState, useEffect, useRef } from 'react';
 import DiktatButton from '../components/DiktatButton';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Car, Plus, Fuel, Wrench, MapPin, Edit, Trash2, Camera, Save, X, AlertTriangle, User } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import toast from 'react-hot-toast';
 import { vehicleApi, memberApi } from '../api';
 
 type Tab = 'trips' | 'fuel' | 'maintenance';
+
+function MiniBarChart({ data, valueKey, color, activeColor, unit }: {
+  data: { month: string; isCurrent: boolean; [key: string]: any }[];
+  valueKey: 'km' | 'liter';
+  color: string;
+  activeColor: string;
+  unit: string;
+}) {
+  const max = Math.max(...data.map(d => Number(d[valueKey]) || 0), 1);
+
+  return (
+    <div className="h-20 grid grid-cols-12 gap-1 items-end pt-2">
+      {data.map(d => {
+        const value = Number(d[valueKey]) || 0;
+        const height = value > 0 ? Math.max(8, Math.round((value / max) * 58)) : 2;
+        return (
+          <div key={d.month} className="h-full min-w-0 flex flex-col items-center justify-end gap-1">
+            <div
+              className="w-full max-w-4 rounded-t transition-all"
+              style={{ height, backgroundColor: d.isCurrent ? activeColor : color }}
+              title={`${d.month}: ${value.toLocaleString('de-AT')} ${unit}`}
+            />
+            <span className="text-[9px] leading-none text-ink-faint truncate">{d.month}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 const TRIP_PURPOSES = ['Einsatzfahrt', 'Übungsfahrt', 'Verwaltungsfahrt', 'Transportfahrt', 'Kontrollfahrt', 'Sonstiges'];
 const MAINTENANCE_TYPES = ['Inspektion', 'Hauptuntersuchung (HU)', 'Reifenwechsel', 'Ölwechsel', 'Bremsenwartung', 'Fahrzeugpflege', 'Reparatur', 'Sonstiges'];
@@ -262,35 +290,6 @@ function YearCharts({ trips, fuel, year }: { trips: any[], fuel: any[], year: st
 
   if (totalKm === 0 && totalL === 0) return null;
 
-  const CustomTooltipKm = ({ active, payload, label }: any) => {
-    if (!active || !payload?.length) return null;
-    return (
-      <div className="bg-white border border-surface-200 rounded-xl shadow-lg px-3 py-2">
-        <p className="text-xs font-semibold text-ink">{label}</p>
-        <p className="text-sm font-bold text-fire-700">{payload[0].value?.toLocaleString('de-AT')} km</p>
-      </div>
-    );
-  };
-
-  const CustomTooltipL = ({ active, payload, label }: any) => {
-    if (!active || !payload?.length) return null;
-    return (
-      <div className="bg-white border border-surface-200 rounded-xl shadow-lg px-3 py-2">
-        <p className="text-xs font-semibold text-ink">{label}</p>
-        <p className="text-sm font-bold text-amber-600">{payload[0].value?.toLocaleString('de-AT')} L</p>
-      </div>
-    );
-  };
-
-  // Custom bar shape to highlight current month
-  const CustomBar = (color: string, activeColor: string) => (props: any) => {
-    const { x, y, width, height, month } = props;
-    const idx = MONTHS.indexOf(month);
-    const fill = idx === currentMonth ? activeColor : color;
-    if (!height || height <= 0) return null;
-    return <rect x={x} y={y} width={width} height={height} rx={4} ry={4} fill={fill} />;
-  };
-
   return (
     <div className="flex gap-4 flex-1">
       {totalKm > 0 && (
@@ -299,15 +298,7 @@ function YearCharts({ trips, fuel, year }: { trips: any[], fuel: any[], year: st
             <p className="text-xs text-ink-muted font-medium">Gefahrene km</p>
             <span className="text-xs font-bold text-ink" style={{ fontFamily: 'var(--font-headings)' }}>{totalKm.toLocaleString('de-AT')} km</span>
           </div>
-          <ResponsiveContainer width="100%" height={80}>
-            <BarChart data={data} barSize={10} margin={{ top: 2, right: 2, left: -28, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f0ef" vertical={false} />
-              <XAxis dataKey="month" tick={{ fontSize: 9, fill: '#c0bbb8' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 9, fill: '#c0bbb8' }} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltipKm />} cursor={{ fill: '#f9f7f5', radius: 4 }} />
-              <Bar dataKey="km" shape={CustomBar('#93c5fd', '#2563eb')} radius={[3,3,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <MiniBarChart data={data} valueKey="km" color="#93c5fd" activeColor="#2563eb" unit="km" />
         </div>
       )}
       {totalL > 0 && (
@@ -316,15 +307,7 @@ function YearCharts({ trips, fuel, year }: { trips: any[], fuel: any[], year: st
             <p className="text-xs text-ink-muted font-medium">Getankte Liter</p>
             <span className="text-xs font-bold text-ink" style={{ fontFamily: 'var(--font-headings)' }}>{totalL.toFixed(0)} L</span>
           </div>
-          <ResponsiveContainer width="100%" height={80}>
-            <BarChart data={data} barSize={10} margin={{ top: 2, right: 2, left: -28, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f0ef" vertical={false} />
-              <XAxis dataKey="month" tick={{ fontSize: 9, fill: '#c0bbb8' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 9, fill: '#c0bbb8' }} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltipL />} cursor={{ fill: '#fef9f0', radius: 4 }} />
-              <Bar dataKey="liter" shape={CustomBar('#86efac', '#16a34a')} radius={[3,3,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <MiniBarChart data={data} valueKey="liter" color="#86efac" activeColor="#16a34a" unit="L" />
         </div>
       )}
     </div>
