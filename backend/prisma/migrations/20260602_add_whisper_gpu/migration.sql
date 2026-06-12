@@ -1,0 +1,1 @@
+ALTER TABLE "app_settings" ADD COLUMN IF NOT EXISTS "whisperGpuMode" TEXT NOT NULL DEFAULT 'auto';

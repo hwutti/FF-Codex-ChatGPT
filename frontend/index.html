@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-96.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Feuerwehr Verwaltung – FF Görtschach</title>
+    <!-- PWA -->
+    <link rel="manifest" href="/api/settings/manifest.json" />
+    <meta name="theme-color" content="#a82828" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="FF Görtschach" />
+    <link rel="apple-touch-icon" id="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- Fonts -->
+    <!-- Fonts werden lokal via npm fontsource geladen -->
+  </head>
+  <body>
+    <!-- Nativer Splash Screen — erscheint sofort vor React -->
+    <div id="native-splash" style="
+      position:fixed; inset:0; background:#ffffff; z-index:99999;
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;
+    ">
+      <img id="splash-logo" src="" style="width:130px;height:130px;object-fit:contain;display:none;position:relative;z-index:1;" />
+      <p id="splash-name" style="color:#666;font-size:13px;font-family:sans-serif;letter-spacing:0.15em;text-transform:uppercase;position:relative;z-index:1;">Feuerwehr Görtschach</p>
+      <div id="splash-spinner" style="width:24px;height:24px;border:2px solid #a82828;border-top-color:transparent;border-radius:50%;animation:sp 0.8s linear infinite;position:relative;z-index:1;"></div>
+      <div id="splash-overlay" style="position:absolute;inset:0;background:rgba(0,0,0,0);display:none;"></div>
+      <style>@keyframes sp{to{transform:rotate(360deg)}}</style>
+    </div>
+    <script>
+      function applyTextColor(color) {
+        document.getElementById('splash-name').style.color = color;
+        document.getElementById('splash-spinner').style.borderColor = color;
+        document.getElementById('splash-spinner').style.borderTopColor = 'transparent';
+      }
+
+      // Gecachte Werte sofort anwenden
+      var cachedIcon = localStorage.getItem('ff_splash_icon');
+      var cachedName = localStorage.getItem('ff_splash_name');
+      var cachedBgColor = localStorage.getItem('ff_splash_bg_color');
+      var cachedBgImage = localStorage.getItem('ff_splash_bg_image');
+      var cachedTextColor = localStorage.getItem('ff_splash_text_color');
+      var splash = document.getElementById('native-splash');
+      var img = document.getElementById('splash-logo');
+
+      if(cachedIcon){ img.src=cachedIcon; img.style.display='block'; }
+      if(cachedName){ document.getElementById('splash-name').textContent=cachedName; }
+      if(cachedBgColor && !cachedBgImage){ splash.style.background=cachedBgColor; }
+      if(cachedBgImage){ splash.style.backgroundImage='url('+cachedBgImage+')'; splash.style.backgroundSize='cover'; splash.style.backgroundPosition='center'; document.getElementById('splash-overlay').style.display='block'; document.getElementById('splash-overlay').style.background='rgba(0,0,0,0.35)'; }
+      if(cachedTextColor){ applyTextColor(cachedTextColor); }
+
+      // Frische Daten vom Server laden
+      fetch('/api/settings').then(r=>r.json()).then(s=>{
+        var icon = s.pwaIcon || s.logoUrl;
+        var name = s.name || 'Feuerwehr Görtschach';
+        var bgColor = s.splashBgColor;
+        var bgImage = s.splashBgImage;
+        var textColor = s.splashTextColor || '#333333';
+
+        if(icon){ img.src=icon; img.style.display='block'; localStorage.setItem('ff_splash_icon',icon); }
+        document.getElementById('splash-name').textContent=name;
+        localStorage.setItem('ff_splash_name',name);
+
+        // Hintergrund: Bild hat Vorrang vor Farbe
+        if(bgImage){
+          splash.style.background='';
+          splash.style.backgroundImage='url('+bgImage+')';
+          splash.style.backgroundSize='cover';
+          splash.style.backgroundPosition='center';
+          document.getElementById('splash-overlay').style.display='block';
+          document.getElementById('splash-overlay').style.background='rgba(0,0,0,0.35)';
+          localStorage.setItem('ff_splash_bg_image',bgImage);
+          localStorage.removeItem('ff_splash_bg_color');
+        } else if(bgColor){
+          splash.style.background=bgColor;
+          splash.style.backgroundImage='';
+          document.getElementById('splash-overlay').style.display='none';
+          localStorage.setItem('ff_splash_bg_color',bgColor);
+          localStorage.removeItem('ff_splash_bg_image');
+        } else {
+          splash.style.background='#ffffff';
+          localStorage.removeItem('ff_splash_bg_color');
+          localStorage.removeItem('ff_splash_bg_image');
+        }
+
+        applyTextColor(textColor);
+        localStorage.setItem('ff_splash_text_color',textColor);
+      }).catch(()=>{});
+
+      // Nach 2.5 Sekunden ausblenden
+      setTimeout(()=>{
+        var el=document.getElementById('native-splash');
+        if(el){el.style.opacity='0';el.style.transition='opacity 0.3s';setTimeout(()=>el.remove(),300);}
+      },2500);
+    </script>
+    <!-- PWA Install Prompt — so früh wie möglich abfangen, vor React -->
+    <script>
+      window.__pwaInstallPrompt = null;
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        window.__pwaInstallPrompt = e;
+        window.dispatchEvent(new Event('pwaInstallReady'));
+      });
+    </script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <!-- Service Worker Registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then(reg => {
+              // Update im Hintergrund prüfen (kein auto-reload, kein SKIP_WAITING)
+              reg.addEventListener('updatefound', () => {
+                console.log('[SW] Update gefunden – wird beim nächsten App-Start aktiv');
+              });
+            })
+            .catch(err => console.warn('[SW] Registrierung fehlgeschlagen:', err));
+        });
+      }
+    </script>
+  </body>
+</html>

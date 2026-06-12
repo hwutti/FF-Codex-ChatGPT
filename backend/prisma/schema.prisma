@@ -1,0 +1,1285 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  COMMANDER
+  DEPUTY_COMMANDER
+  SECRETARY
+  GROUP_COMMANDER
+  MEMBER
+}
+
+enum MemberStatus {
+  ACTIVE
+  RESERVE
+  YOUTH
+  HONORARY
+  EXITED
+}
+
+enum EventType {
+  MEETING
+  EXERCISE
+  INCIDENT
+  FIRE_INCIDENT
+  TECHNICAL_INCIDENT
+  FUNERAL
+  EVENT
+  TRAINING
+  OTHER
+}
+
+enum KommandoTerminType {
+  AUSSCHUSS
+  KOMMANDO
+}
+
+enum ExerciseType {
+  RADIO
+  DISTRICT
+  COMMUNITY
+  DISASTER
+  DRIVE
+  OTHER
+}
+
+enum OrgEventType {
+  MEETING
+  FUNERAL
+  EVENT
+  TRAINING
+  OTHER
+}
+
+enum AttendanceStatus {
+  PRESENT
+  EXCUSED
+  ABSENT
+}
+
+enum IncidentType {
+  FIRE
+  TECHNICAL
+  TRAFFIC_ACCIDENT
+  STORM
+  SEARCH
+  OTHER
+}
+
+model User {
+  id               String    @id @default(cuid())
+  email            String    @unique
+  passwordHash     String
+  role             UserRole  @default(MEMBER)
+  isActive         Boolean   @default(true)
+  memberId         String?   @unique
+  member           Member?   @relation(fields: [memberId], references: [id])
+  twoFactorSecret  String?
+  twoFactorEnabled Boolean   @default(false)
+  avatarUrl        String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  auditLogs        AuditLog[]
+  trustedDevices   TrustedDevice[]
+  permissionGroups UserPermissionGroup[]
+  directPermissions UserDirectPermission[]
+  pushSubscriptions  PushSubscription[]
+  pushNotifications  PushNotification[]
+  // Push-Benachrichtigungs-Einstellungen
+  pushNewEvent    Boolean @default(true)
+  pushNewExercise Boolean @default(true)
+  pushNewIncident Boolean @default(true)
+  pushBirthday    Boolean @default(false)
+  pushUpdate      Boolean @default(false)
+  // Erinnerungen: wie viele Tage vorher
+  pushReminder7   Boolean @default(true)
+  pushReminder3   Boolean @default(true)
+  pushReminder1   Boolean @default(true)
+  // Datenschutz-Bestätigung
+  privacyAcceptedVersion Int?
+  privacyAcceptedAt      DateTime?
+  passwordResetTokens    PasswordResetToken[]
+  // Schriftverkehr
+  signatureImage         String?  // verschlüsseltes Base64-PNG
+  signatureEnabled       Boolean  @default(false)
+  sentLettersRef         String[] // IDs der gesendeten Briefe (Referenz)
+
+  @@map("users")
+}
+
+// Berechtigungsgruppen (z.B. "Kassier", "Kameradschaftsführer")
+model PermissionGroup {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  permissions Json     @default("[]") // Array of {area, action}
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  members     UserPermissionGroup[]
+
+  @@map("permission_groups")
+}
+
+// Many-to-many: User <-> PermissionGroup
+model UserPermissionGroup {
+  userId  String
+  groupId String
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group   PermissionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([userId, groupId])
+  @@map("user_permission_groups")
+}
+
+// Direkte User-Berechtigungen (Override)
+model UserDirectPermission {
+  id     String @id @default(cuid())
+  userId String
+  area   String
+  action String // VIEW, CREATE, EDIT, DELETE
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, area, action])
+  @@map("user_direct_permissions")
+}
+
+model TrustedDevice {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token      String   @unique
+  deviceName String?
+  userAgent  String?
+  ipAddress  String?
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@map("trusted_devices")
+}
+
+model BlacklistedToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("blacklisted_tokens")
+}
+
+model LoginAttempt {
+  id          String   @id @default(cuid())
+  ip          String
+  email       String?
+  count       Int      @default(1)
+  blockedAt   DateTime?
+  firstAttempt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([ip])
+  @@map("login_attempts")
+}
+
+model Member {
+  id                      String       @id @default(cuid())
+  memberNumber            String       @unique
+  firstName               String
+  lastName                String
+  birthDate               DateTime?
+  deathDate               DateTime?
+  fireServicePassNumber   String?
+  street                  String?
+  zipCode                 String?
+  city                    String?
+  phone                   String?
+  email                   String?
+  entryDate               DateTime?
+  exitDate                DateTime?
+  rank                    String?
+  gender                  String?   @default("male") // "male" | "female"
+  functionTitle           String?
+  status                  MemberStatus @default(ACTIVE)
+  groupName               String?
+  driverLicenses          String[]     @default([])
+  isBreathingApparatus    Boolean      @default(false)
+  isMachinist             Boolean      @default(false)
+  hasFirstAidTraining     Boolean      @default(false)
+  isDriver                Boolean      @default(false)
+  isRadioOperator         Boolean      @default(false)
+  isParamedic             Boolean      @default(false)
+  isDiver                 Boolean      @default(false)
+  isFlightHelper          Boolean      @default(false)
+  isHazmatExpert          Boolean      @default(false)
+  isExplosivesExpert      Boolean      @default(false)
+  isMRAS                  Boolean      @default(false)
+  isRescueCutter          Boolean      @default(false)
+  isEquipmentManager      Boolean      @default(false)
+  isYouthLeader           Boolean      @default(false)
+  trainings               String[]     @default([])
+  clothingSizes           Json?
+  emergencyContactName    String?
+  emergencyContactPhone   String?
+  notes                   String?
+  profileImage            String?
+  createdAt               DateTime     @default(now())
+  updatedAt               DateTime     @updatedAt
+
+  user        User?
+  attendances Attendance[]
+  honors      Honor[]
+  incidents   IncidentMember[]
+  responsibleEvents Event[]  @relation("ResponsiblePerson")
+  trips       Trip[]
+  exerciseAttendances    ExerciseAttendance[] @relation("ExerciseAttendance")
+  orgEventAttendances    OrgEventAttendance[] @relation("OrgEventAttendance")
+  responsibleExercises   Exercise[]  @relation("ExerciseResponsible")
+  responsibleOrgEvents   OrgEvent[]  @relation("OrgEventResponsible")
+  kommandoTerminAttendances KommandoTerminAttendance[] @relation("KommandoTerminAttendance")
+
+  @@map("members")
+}
+
+model Event {
+  id                  String     @id @default(cuid())
+  type                EventType
+  title               String
+  date                DateTime
+  startTime           String?
+  endTime             String?
+  location            String?
+  description         String?
+  responsiblePersonId String?
+  responsiblePerson   Member?    @relation("ResponsiblePerson", fields: [responsiblePersonId], references: [id])
+  notes               String?
+  calendarCategory    String?
+  calendarCategoryColor String?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  attendances     Attendance[]
+  protocols       Protocol[]
+  eventEquipment  EventEquipment[]
+
+  @@map("events")
+}
+
+// ── Übungen ───────────────────────────────────────────────────────────────────
+model Exercise {
+  id                  String       @id @default(cuid())
+  type                ExerciseType
+  title               String
+  date                DateTime
+  startTime           String?
+  endTime             String?
+  location            String?
+  description         String?
+  responsiblePersonId String?
+  responsiblePerson   Member?      @relation("ExerciseResponsible", fields: [responsiblePersonId], references: [id])
+  notes               String?
+  calendarEventId     String?      // Verknüpfter Kalender-Eintrag
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  attendances      ExerciseAttendance[]
+  equipment        ExerciseEquipment[]
+
+  @@map("exercises")
+}
+
+model ExerciseAttendance {
+  id         String           @id @default(cuid())
+  exerciseId String
+  exercise   Exercise         @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  memberId   String
+  member     Member           @relation("ExerciseAttendance", fields: [memberId], references: [id])
+  status     AttendanceStatus @default(PRESENT)
+
+  @@unique([exerciseId, memberId])
+  @@map("exercise_attendances")
+}
+
+model ExerciseEquipment {
+  id          String   @id @default(cuid())
+  exerciseId  String
+  exercise    Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  equipmentId String
+  equipment   Equipment @relation("ExerciseEquipment", fields: [equipmentId], references: [id], onDelete: Cascade)
+  durationMin Int?
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@unique([exerciseId, equipmentId])
+  @@map("exercise_equipment")
+}
+
+// ── Ereignisse ────────────────────────────────────────────────────────────────
+model OrgEvent {
+  id                  String       @id @default(cuid())
+  type                OrgEventType
+  title               String
+  date                DateTime
+  startTime           String?
+  endTime             String?
+  location            String?
+  description         String?
+  responsiblePersonId String?
+  responsiblePerson   Member?      @relation("OrgEventResponsible", fields: [responsiblePersonId], references: [id])
+  notes               String?
+  calendarEventId     String?      // Verknüpfter Kalender-Eintrag
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  attendances OrgEventAttendance[]
+
+  @@map("org_events")
+}
+
+model OrgEventAttendance {
+  id         String           @id @default(cuid())
+  orgEventId String
+  orgEvent   OrgEvent         @relation(fields: [orgEventId], references: [id], onDelete: Cascade)
+  memberId   String
+  member     Member           @relation("OrgEventAttendance", fields: [memberId], references: [id])
+  status     AttendanceStatus @default(PRESENT)
+
+  @@unique([orgEventId, memberId])
+  @@map("org_event_attendances")
+}
+
+model Attendance {
+  id        String           @id @default(cuid())
+  eventId   String
+  event     Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  memberId  String
+  member    Member           @relation(fields: [memberId], references: [id])
+  status    AttendanceStatus @default(ABSENT)
+  notes     String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([eventId, memberId])
+  @@map("attendances")
+}
+
+model Incident {
+  id                  String       @id @default(cuid())
+  incidentNumber      String       @unique
+  title               String       @default("")
+  type                IncidentType
+  alarmTime           DateTime?
+  departureTime       DateTime?
+  endTime             DateTime?
+  location            String
+  commanderId         String?
+  shortReport         String?
+  actions             String?
+  specialOccurrences  String?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  members   IncidentMember[]
+  equipment IncidentEquipment[]
+
+  @@map("incidents")
+}
+
+model IncidentEquipment {
+  id          String    @id @default(cuid())
+  incidentId  String
+  incident    Incident  @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  equipmentId String
+  equipment   Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  durationMin Int?      // Dauer in Minuten
+  notes       String?
+  createdAt   DateTime  @default(now())
+
+  @@unique([incidentId, equipmentId])
+  @@map("incident_equipment")
+}
+
+model IncidentMember {
+  id         String   @id @default(cuid())
+  incidentId String
+  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  memberId   String
+  member     Member   @relation(fields: [memberId], references: [id])
+
+  @@unique([incidentId, memberId])
+  @@map("incident_members")
+}
+
+model Honor {
+  id        String   @id @default(cuid())
+  memberId  String
+  member    Member   @relation(fields: [memberId], references: [id])
+  title     String
+  honorDate DateTime
+  reason    String?
+  awardedBy String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("honors")
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  title       String
+  category    String
+  isPublic    Boolean  @default(false)
+  fileUrl     String
+  fileName    String
+  fileSize    Int?
+  mimeType    String?
+  author      String?
+  notes       String?
+  date        String?
+  uploadedBy  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("documents")
+}
+
+model Protocol {
+  id          String   @id @default(cuid())
+  title       String
+  date        DateTime
+  eventId     String?
+  event       Event?   @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  author      String?
+  notes       String?
+  fileUrl     String
+  fileName    String
+  fileSize    Int?
+  mimeType    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  signatures  ProtocolSignature[]
+  parentId    String?
+  parent      Protocol?  @relation("SignedVersions", fields: [parentId], references: [id], onDelete: SetNull)
+  signedVersions Protocol[] @relation("SignedVersions")
+
+  @@map("protocols")
+}
+
+model ProtocolSignature {
+  id          String   @id @default(cuid())
+  protocolId  String
+  protocol    Protocol @relation(fields: [protocolId], references: [id], onDelete: Cascade)
+  signerName  String
+  signerRole  String?
+  signatureData String  @db.Text  // Base64 JPEG, komprimiert
+  createdAt   DateTime @default(now())
+
+  @@map("protocol_signatures")
+}
+
+model AppSettings {
+  id                    String   @id @default("singleton")
+  name                  String   @default("Feuerwehr Görtschach")
+  subtitle              String   @default("Verwaltung")
+  foundedYear           String   @default("1888")
+  primaryColor          String   @default("#a82828")
+  logoUrl               String?
+  loginTitle            String   @default("Mitglieder & Einsatzverwaltung")
+  loginSubtitle         String   @default("Professionelle Verwaltung für die Freiwillige Feuerwehr")
+  loginColor            String   @default("#a82828")
+  loginBadge            String   @default("VERWALTUNGSSYSTEM")
+  loginWelcomeTitle     String   @default("Willkommen zurück")
+  loginWelcomeSubtitle  String   @default("Bitte melde dich an um fortzufahren.")
+  loginBgColor          String   @default("#1a0a05")
+  loginBgImage          String?
+  groqApiKey            String?
+  geminiApiKey          String?
+  openaiApiKey          String?
+  ollamaUrl             String?
+  ollamaModel           String?  @default("llama3")
+  activeAiProvider      String?  @default("gemini")
+  pwaName               String?
+  pwaShortName          String?
+  pwaIcon               String?
+  splashBgColor         String?
+  splashBgImage         String?
+  splashTextColor       String?  @default("#333333")
+  dashboardBgColor      String?  @default("#2d2724")
+  dashboardBgImage      String?
+  dashboardTextColor    String?  @default("#ffffff")
+  radarLat              Float?   @default(46.62)
+  radarLng              Float?   @default(13.22)
+  radarZoom             Int?     @default(9)
+  radarLayer            String?  @default("radar")
+  radarOpacity          Int?     @default(83)
+  radarSpeed            Int?     @default(4)
+  radarHeight           Int?     @default(220)
+  radarLabels           Boolean? @default(false)
+  radarDarkMap          Boolean? @default(false)
+  radarTitle            String?  @default("Regenradar — Görtschach")
+  pushReminderHour      Int?     @default(19)
+  pushReminderMinute    Int?     @default(0)
+  whisperModel          String?  @default("medium")
+  whisperLanguage       String?  @default("de")
+  whisperEngine         String   @default("faster-whisper")
+  whisperGpuMode        String   @default("auto")
+  ollamaCpuLimit        Int      @default(80)
+  ollamaRamLimit        Int      @default(4)
+  whisperCpuLimit       Int      @default(80)
+  whisperRamLimit       Int      @default(4)
+  githubToken           String?
+  githubRepo            String?
+  privacyText           String?  @db.Text
+  privacyVersion        Int      @default(0)
+  privacyVersionNote    String?
+  privacyHeaderBg       String?  @default("#1e293b")
+  privacyHeaderText     String?  @default("#ffffff")
+  privacyPageBg         String?  @default("#f1f5f9")
+  privacyButtonBg       String?  @default("#16a34a")
+  privacyContentText    String?  @default("#374151")
+  // Schriftarten pro Bereich
+  fontGeneral           String?  @default("DM Sans")
+  fontHeadings          String?  @default("Outfit")
+  fontLogin             String?  @default("Outfit")
+  fontSidebar           String?  @default("DM Sans")
+  fontDashboard         String?  @default("Outfit")
+  fontPrivacy           String?  @default("DM Sans")
+  // SMTP E-Mail Konfiguration
+  smtpHost              String?
+  smtpPort              Int?     @default(587)
+  smtpUser              String?
+  smtpPass              String?
+  smtpFrom              String?
+  smtpSecure            Boolean  @default(false)
+  emailHeaderBg         String?  @default("#a82828")
+  emailButtonBg         String?  @default("#a82828")
+  emailFooterText       String?
+  emailFont             String?  @default("Arial")
+  emailSubject          String?  @default("Passwort zurücksetzen — {{name}}")
+  emailHeadline         String?  @default("Passwort zurücksetzen")
+  emailBodyText         String?  @db.Text
+  emailButtonText       String?  @default("Passwort zurücksetzen →")
+  emailHeaderImage      String?
+  updatedAt             DateTime @updatedAt
+
+  @@map("app_settings")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  action    String
+  entity    String
+  entityId  String?
+  details   Json?
+  createdAt DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+model CalendarCategory {
+  id        String          @id @default(cuid())
+  name      String
+  color     String          @default("#a82828")
+  isCommand Boolean         @default(false)
+  createdAt DateTime        @default(now())
+  events    CalendarEvent[]
+
+  @@map("calendar_categories")
+}
+
+model CalendarEvent {
+  id           String           @id @default(cuid())
+  title        String
+  description  String?
+  location     String?
+  trainingLocation String?      // Übungsort
+  commanderId  String?          // Kommandant (Member)
+  status       String?          @default("PLANNED") // PLANNED, CONFIRMED, CANCELLED
+  allDay       Boolean          @default(false)
+  startDate    DateTime
+  endDate      DateTime
+  categoryId   String?
+  category     CalendarCategory? @relation(fields: [categoryId], references: [id])
+  isCommand    Boolean           @default(false)
+  eventId      String?          @unique
+  sourceType   String?          // EXERCISE | ORG_EVENT | KOMMANDO_TERMIN
+  sourceId     String?          // ID des verknüpften Datensatzes
+  createdBy    String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@map("calendar_events")
+}
+
+// ── Kommandotermine ────────────────────────────────────────────────────────────
+model KommandoTermin {
+  id                  String              @id @default(cuid())
+  type                KommandoTerminType
+  title               String
+  date                DateTime
+  startTime           String?
+  endTime             String?
+  location            String?
+  description         String?
+  notes               String?
+  calendarEventId     String?             // Verknüpfter Kalender-Kommando Eintrag
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  attendances KommandoTerminAttendance[]
+
+  @@map("kommando_termins")
+}
+
+model KommandoTerminAttendance {
+  id               String           @id @default(cuid())
+  kommandoTerminId String
+  kommandoTermin   KommandoTermin   @relation(fields: [kommandoTerminId], references: [id], onDelete: Cascade)
+  memberId         String
+  member           Member           @relation("KommandoTerminAttendance", fields: [memberId], references: [id])
+  status           AttendanceStatus @default(PRESENT)
+
+  @@unique([kommandoTerminId, memberId])
+  @@map("kommando_termin_attendances")
+}
+
+// ── Fahrtenbuch ───────────────────────────────────────────────────────────────
+
+model Vehicle {
+  id           String    @id @default(cuid())
+  name         String
+  licensePlate String?
+  type         String?
+  brand        String?
+  model        String?
+  year         Int?
+  currentKm    Int       @default(0)
+  photoUrl     String?
+  notes        String?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  trips        Trip[]
+  fuelEntries  FuelEntry[]
+  maintenances Maintenance[]
+
+  @@map("vehicles")
+}
+
+model Trip {
+  id            String   @id @default(cuid())
+  vehicleId     String
+  vehicle       Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  driverId      String?
+  driver        Member?  @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  date          DateTime
+  startKm       Int
+  endKm         Int
+  startLocation String?
+  endLocation   String?
+  purpose       String?
+  notes         String?
+  createdById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  fuelEntries   FuelEntry[]
+  signatures    TripSignature[]
+
+  @@map("trips")
+}
+
+model TripSignature {
+  id            String   @id @default(cuid())
+  tripId        String
+  trip          Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  signerName    String
+  signerRole    String?
+  signatureData String   @db.Text
+  createdAt     DateTime @default(now())
+
+  @@map("trip_signatures")
+}
+
+model FuelEntry {
+  id        String   @id @default(cuid())
+  vehicleId String
+  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  tripId    String?
+  trip      Trip?    @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  date      DateTime
+  liters    Float
+  costTotal Float?
+  kmStand   Int
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("fuel_entries")
+}
+
+model Maintenance {
+  id          String    @id @default(cuid())
+  vehicleId   String
+  vehicle     Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  type        String
+  date        DateTime
+  kmStand     Int?
+  cost        Float?
+  nextDueDate DateTime?
+  nextDueKm   Int?
+  performedBy String?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("maintenances")
+}
+
+// ── Gerätebuch ────────────────────────────────────────────────────────────────
+
+model Equipment {
+  id              String    @id @default(cuid())
+  name            String
+  category        String?
+  customCategory  String?
+  serialNumber    String?
+  manufacturer    String?
+  purchaseDate    DateTime?
+  purchasePrice   Float?
+  location        String?
+  photoUrl        String?
+  notes           String?
+  isActive        Boolean   @default(true)
+  checkInterval   String?   // Jährlich, Halbjährlich, etc.
+  nextCheckDate   DateTime?
+  createdById     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  checks          EquipmentCheck[]
+  repairs         EquipmentRepair[]
+  defects         EquipmentDefect[]
+  loans           EquipmentLoan[]
+  eventEquipment    EventEquipment[]
+  incidentEquipment IncidentEquipment[]
+  exerciseEquipment ExerciseEquipment[] @relation("ExerciseEquipment")
+
+  @@map("equipment")
+}
+
+model EquipmentCheck {
+  id            String   @id @default(cuid())
+  equipmentId   String
+  equipment     Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  date          DateTime
+  result        String   // OK, Mangel, Außer Betrieb
+  checkedById   String?
+  checkedByName String?
+  nextCheckDate DateTime?
+  notes         String?
+  createdById   String
+  createdByName String
+  createdAt     DateTime @default(now())
+
+  @@map("equipment_checks")
+}
+
+model EquipmentRepair {
+  id            String   @id @default(cuid())
+  equipmentId   String
+  equipment     Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  date          DateTime
+  description   String
+  performedBy   String?
+  cost          Float?
+  status        String   @default("Abgeschlossen") // In Bearbeitung, Abgeschlossen
+  notes         String?
+  createdById   String
+  createdByName String
+  createdAt     DateTime @default(now())
+
+  @@map("equipment_repairs")
+}
+
+model EquipmentDefect {
+  id            String   @id @default(cuid())
+  equipmentId   String
+  equipment     Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  description   String
+  status        String   @default("Gemeldet") // Gemeldet, In Reparatur, Behoben
+  reportedById  String
+  reportedByName String
+  resolvedAt    DateTime?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("equipment_defects")
+}
+
+model EquipmentLoan {
+  id            String    @id @default(cuid())
+  equipmentId   String
+  equipment     Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  borrowedById  String?
+  borrowedByName String
+  borrowedAt    DateTime  @default(now())
+  expectedReturn DateTime?
+  returnedAt    DateTime?
+  notes         String?
+  createdById   String
+  createdByName String
+  createdAt     DateTime  @default(now())
+
+  @@map("equipment_loans")
+}
+
+model EventEquipment {
+  id            String    @id @default(cuid())
+  eventId       String
+  event         Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  equipmentId   String
+  equipment     Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  hoursUsed     Int?      // Stunden Betriebsdauer
+  minutesUsed   Int?      // Minuten Betriebsdauer
+  notes         String?
+  createdAt     DateTime  @default(now())
+
+  @@unique([eventId, equipmentId])
+  @@map("event_equipment")
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@map("push_subscriptions")
+}
+
+model PushNotification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  url       String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("push_notifications")
+}
+
+model EinsatzplanFolder {
+  id        String              @id @default(cuid())
+  name      String
+  color     String              @default("#16a34a")
+  parentId  String?
+  parent    EinsatzplanFolder?  @relation("FolderChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  children  EinsatzplanFolder[] @relation("FolderChildren")
+  plans     Einsatzplan[]
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  @@map("einsatzplan_folders")
+}
+
+model Einsatzplan {
+  id          String             @id @default(cuid())
+  title       String
+  description String?
+  fileUrl     String
+  fileName    String
+  fileSize    Int?
+  mimeType    String?
+  folderId    String?
+  folder      EinsatzplanFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  uploadedBy  String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@map("einsatzplaene")
+}
+
+model EinsatzplanPapierkorb {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  fileUrl     String
+  fileName    String
+  fileSize    Int?
+  mimeType    String?
+  folderId    String?
+  folderName  String?
+  deletedBy   String?
+  deletedAt   DateTime @default(now())
+
+  @@map("einsatzplan_papierkorb")
+}
+
+model SystemMetric {
+  id        Int      @id @default(autoincrement())
+  timestamp DateTime @default(now()) @db.Timestamptz
+  cpuUsage  Int
+  ramUsage  Int
+  ramTotal  BigInt
+  ramFree   BigInt
+
+  @@index([timestamp])
+  @@map("system_metrics")
+}
+
+model DiskMetric {
+  id        Int      @id @default(autoincrement())
+  timestamp DateTime @default(now()) @db.Timestamptz
+  partition String
+  total     BigInt
+  free      BigInt
+  used      BigInt
+
+  @@index([timestamp])
+  @@index([partition])
+  @@map("disk_metrics")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model AiUsage {
+  id           String   @id @default(cuid())
+  provider     String
+  function     String
+  model        String?
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  totalTokens  Int      @default(0)
+  userId       String?
+  createdAt    DateTime @default(now())
+
+  @@index([provider])
+  @@index([function])
+  @@index([createdAt])
+  @@map("ai_usage")
+}
+
+// ── Schriftverkehr ────────────────────────────────────────────────────────────
+
+model LetterDesign {
+  id                String   @id @default(cuid())
+  name              String   @default("Standard")
+  // Design-Optionen
+  accentColor       String   @default("#8B1A1A")
+  signerPosition    String   @default("right") // left, right
+  footerBgColor     String?
+  // Briefkopf
+  headerBgColor     String   @default("#8B1A1A")
+  headerBgImage     String?  // Pfad zum Hintergrundbild
+  headerBgImageOpacity Float @default(1.0)
+  headerLogoLeft    String?  // Pfad zum linken Logo
+  headerLogoRight   String?  // Pfad zum rechten Logo
+  headerLogoCenter  String?  // Pfad zum mittleren Logo
+  headerLogoPosition String  @default("both") // left, center, right, both
+  headerTitle       String   @default("")
+  headerSubtitle    String   @default("")
+  headerTitleColor  String   @default("#ffffff")
+  headerTitleSize   Int      @default(16)
+  // Brief-Hintergrund
+  bodyBgColor       String   @default("#ffffff")
+  bodyBgImage       String?
+  bodyBgImageOpacity Float   @default(0.15)
+  // Typografie
+  fontFamily        String   @default("Arial")
+  fontSize          Int      @default(12)
+  // Absender-Block
+  senderName        String   @default("")
+  senderAddress     String   @default("")
+  senderPhone       String   @default("")
+  senderEmail       String   @default("")
+  senderWebsite     String   @default("")
+  senderCity        String   @default("")  // Ort für Datum-Zeile, z.B. "Görtschach"
+  senderLineText    String   @default("")  // Absender-Zeile im Brief, z.B. "FF Görtschach im Gailtal"
+  template          String   @default("classic") // HTML-Template: classic, minimal, sidebar, diagonal, ...
+  designType        String   @default("brief")   // brief | invitation
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("letter_designs")
+}
+
+model LetterTemplate {
+  id           String   @id @default(cuid())
+  name         String
+  type         String   @default("letter") // letter, invitation
+  description  String?
+  // Brieffelder
+  subject      String   @default("")
+  salutation   String   @default("")
+  body         String   @default("")
+  closing      String   @default("Mit freundlichen Grüßen,")
+  // Metadaten
+  createdBy    String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  sentLetters  LetterSent[]
+
+  @@map("letter_templates")
+}
+
+model LetterContact {
+  id           String   @id @default(cuid())
+  name         String
+  function     String?
+  organization String?
+  street       String?
+  zip          String?
+  city         String?
+  email        String?
+  phone        String?
+  notes        String?
+  createdBy    String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("letter_contacts")
+}
+
+model LetterSent {
+  id           String   @id @default(cuid())
+  // Absender
+  sentBy       String
+  sentByName   String
+  // Empfänger (JSON-Array)
+  recipients   String   // JSON: [{name, email}]
+  // Brief-Inhalt (Snapshot zum Zeitpunkt des Versands)
+  subject      String
+  salutation   String   @default("")
+  body         String
+  closing      String   @default("")
+  signers      String   @default("[]") // JSON: [{userId, name, function}]
+  // Versandmodus
+  sendMode     String   @default("html_pdf") // pdf, html, html_pdf
+  // Referenz zur Vorlage (optional)
+  templateId   String?
+  template     LetterTemplate? @relation(fields: [templateId], references: [id])
+  // Status
+  status       String   @default("sent") // sent, failed, partial
+  errorMessage String?
+  designSnapshot String? // JSON: komplettes Design-Objekt zum Zeitpunkt des Versands
+  type         String   @default("letter") // letter | invitation | training_plan
+  extraData    String?  // JSON: typ-spezifische Daten (eventName, year, etc.)
+  createdAt    DateTime @default(now())
+
+  @@index([sentBy])
+  @@index([createdAt])
+  @@map("letter_sent")
+}
+
+model InvitationSent {
+  id                String   @id @default(cuid())
+  // Absender
+  sentBy            String
+  sentByName        String
+  // Empfänger (JSON-Array)
+  recipients        String   // JSON: [{name, email}]
+  // Einladungs-Inhalt
+  eventName         String   // Veranstaltungsname
+  eventDate         String   @default("") // Datum der Veranstaltung
+  eventTime         String   @default("") // Uhrzeit
+  eventLocation     String   @default("") // Ort
+  eventProgram      String   @default("") // Programmpunkte (mehrzeilig)
+  rsvpDeadline      String   @default("") // Anmeldeschluss
+  directions        String   @default("") // Anreise-Hinweis
+  introText         String   @default("") // Einleitungstext
+  closing           String   @default("")
+  signers           String   @default("[]") // JSON: [{name, function, signatureBase64}]
+  // Versandmodus
+  sendMode          String   @default("html_pdf")
+  // Design-Snapshot
+  designSnapshot    String?
+  // Status
+  status            String   @default("sent") // sent, failed, partial
+  createdAt         DateTime @default(now())
+
+  @@index([sentBy])
+  @@index([createdAt])
+  @@map("invitation_sent")
+}
+
+model Draft {
+  id             String   @id @default(cuid())
+  type           String   @default("letter") // letter, invitation
+  title          String   // Anzeige-Titel (Betreff oder Veranstaltungsname)
+  createdBy      String
+  createdByName  String
+  // Gemeinsame Felder
+  closing        String   @default("")
+  signerUserIds  String   @default("[]") // JSON: [userId]
+  designId       String?
+  designSnapshot String?  // JSON: komplettes Design-Objekt
+  sendCount      Int      @default(0) // wie oft versendet
+  lastSentAt     DateTime?
+  // Brief-Felder
+  subject        String   @default("")
+  salutation     String   @default("")
+  body           String   @default("")
+  recipientName  String   @default("")
+  recipientAddress String @default("")
+  date           String   @default("")
+  // Einladungs-Felder
+  eventName      String   @default("")
+  eventDate      String   @default("")
+  eventTime      String   @default("")
+  eventLocation  String   @default("")
+  eventProgram   String   @default("")
+  rsvpDeadline   String   @default("")
+  directions     String   @default("")
+  introText      String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([createdBy])
+  @@index([type])
+  @@index([updatedAt])
+  @@map("drafts")
+}
+
+model Distributor {
+  id        String   @id @default(cuid())
+  name      String
+  memberIds  String   @default("[]") // JSON: [memberId]
+  contactIds String   @default("[]") // JSON: [contactId] — externe Kontakte
+  createdAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("distributors")
+}
+
+model TrainingPlan {
+  id             String              @id @default(cuid())
+  year           Int
+  title          String?             // optionaler Freitext-Name
+  createdBy      String
+  createdByName  String
+  designId       String?
+  designSnapshot String?             // JSON: komplettes LetterDesign-Objekt
+  signerUserIds  String              @default("[]") // JSON: [userId]
+  closing        String              @default("Mit kameradschaftlichen Grüßen")
+  status         String              @default("draft") // draft, published
+  sendCount      Int                 @default(0)
+  lastSentAt     DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  entries        TrainingPlanEntry[]
+
+  @@unique([year])
+  @@index([createdBy])
+  @@map("training_plans")
+}
+
+model TrainingPlanEntry {
+  id          String       @id @default(cuid())
+  planId      String
+  plan        TrainingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  date        String       // "20.03."
+  time        String?      // "19:00 Uhr" oder null → wird als "—" angezeigt
+  type        String       // EINSATZ | FUNK | GEMEINDE | ABSCHNITT | SONSTIGE
+  title       String       // z.B. "Einsatzübung" oder "Funkübung in Dellach"
+  location    String?      // optionaler Ort
+  leaderId    String?      // userId des Übungsleiters (nullable — extern möglich)
+  leaderName  String?      // denormalisiert für PDF-Rendering
+  calendarId  String?      // verknüpfte exercise-ID nach "In Kalender übernehmen"
+  sortOrder   Int          @default(0)
+  createdAt   DateTime     @default(now())
+
+  @@index([planId])
+  @@map("training_plan_entries")
+}
+
+model ScheduledSend {
+  id              String    @id @default(cuid())
+  scheduledBy     String
+  scheduledByName String
+  scheduledAt     DateTime
+  status          String    @default("pending") // pending | processing | sent | partial | cancelled | failed
+  errorMessage    String?
+  draftType       String    // letter | invitation | training_plan
+  draftId         String?
+  draftTitle      String    @default("")
+  recipientCount  Int       @default(0)
+  payload         String    // JSON: alle Versand-Parameter
+  sentAt          DateTime?
+  sentCount       Int?
+  failedCount     Int?
+  createdAt       DateTime  @default(now())
+
+  @@index([scheduledAt])
+  @@index([status])
+  @@map("scheduled_sends")
+}
+
+model Schulungsplan {
+  id              String   @id @default(cuid())
+  year            Int
+  title           String   @default("")
+  createdBy       String
+  createdByName   String   @default("")
+  designId        String?
+  designSnapshot  String?
+  signerUserIds   String   @default("[]")
+  closing         String   @default("Mit kameradschaftlichen Grüßen")
+  status          String   @default("draft")
+  sendCount       Int      @default(0)
+  lastSentAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  entries         SchulungsplanEntry[]
+
+  @@index([createdBy])
+  @@map("schulungsplaene")
+}
+
+model SchulungsplanEntry {
+  id          String   @id @default(cuid())
+  planId      String
+  plan        Schulungsplan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  date        String
+  time        String?
+  type        String
+  title       String
+  location    String?
+  trainerId   String?
+  trainerName String?
+  calendarId  String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([planId])
+  @@map("schulungsplan_eintraege")
+}

@@ -1,0 +1,41 @@
+[Unit]
+Description=Feuerwehr App Backend
+Documentation=https://github.com/your-org/feuerwehr-app
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=feuerwehrapp
+Group=feuerwehrapp
+WorkingDirectory=/var/www/feuerwehr-app/backend
+
+# Load environment variables from .env file
+EnvironmentFile=/var/www/feuerwehr-app/backend/.env
+
+# Start command
+ExecStart=/usr/bin/node /var/www/feuerwehr-app/backend/dist/server.js
+
+# Restart on failure
+Restart=always
+RestartSec=10
+StartLimitInterval=60
+StartLimitBurst=3
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/www/feuerwehr-app/uploads /var/www/feuerwehr-app/backend
+PrivateTmp=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=feuerwehr-app-backend
+
+# Resource limits
+LimitNOFILE=65536
+CPUQuota=400%
+
+[Install]
+WantedBy=multi-user.target
