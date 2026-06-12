@@ -14,17 +14,6 @@ export const aiApi = axios.create({
 });
 
 // Request interceptor: Bearer Token als Fallback (Cookie ist primär)
-const authRequestInterceptor = (config: any) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-};
-
-api.interceptors.request.use(authRequestInterceptor);
-aiApi.interceptors.request.use(authRequestInterceptor);
-
 // Response interceptor: handle 401
 // WICHTIG: kein window.location.href – verursacht Reload-Loop im iOS PWA Standalone-Mode.
 // Custom Event → AuthContext navigiert per React Router (kein Hard-Reload).
@@ -154,11 +143,9 @@ export const userApi = {
     const form = new FormData();
     form.append('avatar', file);
     const url = userId ? `/api/users/${userId}/avatar` : '/api/users/me/avatar';
-    const token = localStorage.getItem('token');
     const response = await fetch(url, {
       method: 'POST',
       credentials: 'include',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: form,
     });
     const data = await response.json();
@@ -186,11 +173,9 @@ export const settingsApi = {
   uploadLogo: async (file: File) => {
     const form = new FormData();
     form.append('logo', file);
-    const token = localStorage.getItem('token');
     const response = await fetch('/api/settings/logo', {
       method: 'POST',
       credentials: 'include',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: form,
     });
     if (!response.ok) throw { response: { data: await response.json() } };
@@ -209,11 +194,9 @@ export const protocolApi = {
     const form = new FormData();
     form.append('file', file);
     Object.entries(meta).forEach(([k, v]) => { if (v) form.append(k, v); });
-    const token = localStorage.getItem('token');
     const response = await fetch('/api/protocols', {
       method: 'POST',
       credentials: 'include',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: form,
     });
     if (!response.ok) throw { response: { data: await response.json() } };
@@ -239,11 +222,9 @@ export const documentApi = {
     if (meta.author) form.append('author', meta.author);
     if (meta.notes) form.append('notes', meta.notes);
     if (meta.date) form.append('date', meta.date);
-    const token = localStorage.getItem('token');
     const res = await fetch('/api/documents', {
       method: 'POST',
       credentials: 'include',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: form,
     });
     if (!res.ok) throw { response: { data: await res.json() } };
@@ -265,10 +246,8 @@ export const vehicleApi = {
   uploadPhoto: async (id: string, file: File) => {
     const form = new FormData();
     form.append('photo', file);
-    const token = localStorage.getItem('token');
     const res = await fetch(`/api/vehicles/${id}/photo`, {
       method: 'POST', credentials: 'include',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: form,
     });
     if (!res.ok) throw await res.json();
@@ -305,10 +284,8 @@ export const equipmentApi = {
   uploadPhoto: async (id: string, file: File) => {
     const form = new FormData();
     form.append('photo', file);
-    const token = localStorage.getItem('token');
     const res = await fetch(`/api/equipment/${id}/photo`, {
       method: 'POST', credentials: 'include',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: form,
     });
     if (!res.ok) throw await res.json();

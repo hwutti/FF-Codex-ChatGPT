@@ -45,6 +45,33 @@ export function decrypt(ciphertext: string): string {
  * Maskiert einen GitHub-Token für die Anzeige.
  * ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx → ghp_****...xxxx
  */
+export function decryptSecret(value?: string | null): string {
+  if (!value) return '';
+  try {
+    return decrypt(value);
+  } catch {
+    return value;
+  }
+}
+
+export function isMaskedSecret(value?: string | null): boolean {
+  if (!value) return false;
+  const trimmed = value.trim();
+  return trimmed === '********' || trimmed.includes('****') || trimmed.includes('•');
+}
+
+export function prepareSecretForStorage(input: unknown, current?: string | null): string | null {
+  if (input === undefined) return current || null;
+  const value = String(input || '').trim();
+  if (!value) return null;
+  if (isMaskedSecret(value)) return current || null;
+  return encrypt(value);
+}
+
+export function maskSecret(value?: string | null): string {
+  return decryptSecret(value) ? '********' : '';
+}
+
 export function maskToken(token: string): string {
   if (!token || token.length < 12) return '****';
   const prefix = token.substring(0, 4);  // "ghp_"

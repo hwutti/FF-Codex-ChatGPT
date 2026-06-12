@@ -1218,11 +1218,9 @@ function PwaBrandingCard() {
     try {
       const form = new FormData();
       form.append('icon', file);
-      const token = localStorage.getItem('token');
       const res = await fetch('/api/settings/pwa-icon', {
         method: 'POST',
         credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: form,
       });
       const data = await res.json();
@@ -2124,13 +2122,12 @@ function DataSection() {
     setShowRestoreConfirm(false);
     setRestoring(true);
     try {
-      const token = localStorage.getItem('token');
       const form = new FormData();
       form.append('backup', pendingRestoreFile);
       if (restorePassword) form.append('password', restorePassword);
       const res = await fetch('/api/backup/restore', {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
         body: form,
       });
       const data = await res.json();
@@ -2170,10 +2167,9 @@ function DataSection() {
     setShowServerRestoreConfirm(null);
     setRestoring(true);
     try {
-      const token = localStorage.getItem('token');
       const res = await fetch(`/api/backup/server-restore/${encodeURIComponent(filename)}`, {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -2492,10 +2488,10 @@ function EmailSection() {
     setTesting(true);
     setTestLogs([]);
     try {
-      const token = localStorage.getItem('token');
       const res = await fetch('/api/settings/smtp-test', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ ...form, smtpPort: parseInt(form.smtpPort), testEmail }),
       });
       const reader = res.body!.getReader();
@@ -2746,11 +2742,6 @@ function UpdateSection() {
   const countdownRef = useRef<any>(null);
   const updatingRef = useRef(false);
 
-  const { token } = useAuth();
-  const tokenRef = useRef(token);
-  useEffect(() => { tokenRef.current = token; }, [token]);
-  const getToken = () => tokenRef.current || '';
-
   // Startet den Status-Polling Loop
   const startStatusPolling = useCallback(() => {
     if (pollRef.current) return;
@@ -2763,7 +2754,7 @@ function UpdateSection() {
     if (countdownRef.current) clearInterval(countdownRef.current);
     pollRef.current = setInterval(async () => {
       try {
-        const sr = await fetch('/api/update/status', { headers: { Authorization: `Bearer ${getToken()}` } });
+        const sr = await fetch('/api/update/status');
         const status = await sr.json();
         setUpdateLog(status.log || '');
         if (!status.running && status.done) {
@@ -2785,25 +2776,25 @@ function UpdateSection() {
 
   // Master-Polling: prüft alle 3s den Gesamt-Status (Announce + Update laufend)
   useEffect(() => {
-    fetch('/api/update/version', { headers: { Authorization: `Bearer ${getToken()}` } })
+    fetch('/api/update/version')
       .then(r => r.json()).then(setVersionInfo).catch(() => {});
 
     // GitHub-Config laden
-    fetch('/api/settings/github-config', { headers: { Authorization: `Bearer ${getToken()}` } })
+    fetch('/api/settings/github-config')
       .then(r => r.json()).then(setGithubConfig).catch(() => {});
 
     const masterPoll = setInterval(async () => {
       if (updatingRef.current) return; // Update läuft bereits, kein Doppel-Start
       try {
         // Prüfe ob Update gerade läuft
-        const sr = await fetch('/api/update/status', { headers: { Authorization: `Bearer ${getToken()}` } });
+        const sr = await fetch('/api/update/status');
         const status = await sr.json();
         if (status.running) {
           startStatusPolling();
           return;
         }
         // Prüfe Announce-Status
-        const ar = await fetch('/api/update/announce-status', { headers: { Authorization: `Bearer ${getToken()}` } });
+        const ar = await fetch('/api/update/announce-status');
         const data = await ar.json();
         if (data.announced) {
           const elapsed = Math.floor((Date.now() - new Date(data.startedAt).getTime()) / 1000);
@@ -2825,10 +2816,10 @@ function UpdateSection() {
     // Sofort beim Mount einmal prüfen
     (async () => {
       try {
-        const sr = await fetch('/api/update/status', { headers: { Authorization: `Bearer ${getToken()}` } });
+        const sr = await fetch('/api/update/status');
         const status = await sr.json();
         if (status.running) { startStatusPolling(); return; }
-        const ar = await fetch('/api/update/announce-status', { headers: { Authorization: `Bearer ${getToken()}` } });
+        const ar = await fetch('/api/update/announce-status');
         const data = await ar.json();
         if (data.announced) {
           const elapsed = Math.floor((Date.now() - new Date(data.startedAt).getTime()) / 1000);
@@ -2861,7 +2852,7 @@ function UpdateSection() {
   const handleCheck = async () => {
     setChecking(true); setCheckResult(null);
     try {
-      const res = await fetch('/api/update/check', { headers: { Authorization: `Bearer ${getToken()}` } });
+      const res = await fetch('/api/update/check');
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setCheckResult(data);
@@ -2872,7 +2863,7 @@ function UpdateSection() {
   const announceUpdate = async () => {
     setShowConfirm(false);
     try {
-      const res = await fetch('/api/update/announce', { method: 'POST', headers: { Authorization: `Bearer ${getToken()}` } });
+      const res = await fetch('/api/update/announce', { method: 'POST' });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
       setAnnounced(true);
       setCountdown(300);
@@ -2882,7 +2873,7 @@ function UpdateSection() {
 
   const cancelUpdate = async () => {
     try {
-      await fetch('/api/update/cancel', { method: 'POST', headers: { Authorization: `Bearer ${getToken()}` } });
+      await fetch('/api/update/cancel', { method: 'POST' });
       setAnnounced(false);
       setCountdown(0);
       if (countdownRef.current) clearInterval(countdownRef.current);
@@ -2893,7 +2884,7 @@ function UpdateSection() {
   const startUpdateNow = async () => {
     setShowConfirm(false);
     try {
-      const res = await fetch('/api/update/start', { method: 'POST', headers: { Authorization: `Bearer ${getToken()}` } });
+      const res = await fetch('/api/update/start', { method: 'POST' });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
       startStatusPolling();
     } catch (err: any) { toast.error(err.message); setUpdating(false); }
@@ -3118,10 +3109,8 @@ function GitHubSection({ onConfigChange }: { onConfigChange: (cfg: any) => void 
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
-  const { token: authToken } = useAuth();
-
   useEffect(() => {
-    fetch('/api/settings/github-config', { headers: { Authorization: `Bearer ${authToken}` } })
+    fetch('/api/settings/github-config')
       .then(r => r.json()).then(cfg => {
         setConfig(cfg);
         setRepo(cfg.repo || '');
@@ -3134,7 +3123,7 @@ function GitHubSection({ onConfigChange }: { onConfigChange: (cfg: any) => void 
     try {
       const r = await fetch('/api/settings/github-config', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: token.trim(), repo: repo.trim() }),
       });
       const d = await r.json();
@@ -3155,7 +3144,6 @@ function GitHubSection({ onConfigChange }: { onConfigChange: (cfg: any) => void 
     try {
       const r = await fetch('/api/settings/github-test', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${authToken}` },
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error);
@@ -3341,14 +3329,11 @@ function AppRestartSection() {
   const [countdown, setCountdown] = useState(0);
   const [restarting, setRestarting] = useState(false);
   const countdownRef = useRef<any>(null);
-  const { token } = useAuth();
-
   const announceRestart = async () => {
     setConfirmed(false);
     try {
       await fetch('/api/update/restart-announce', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
       });
       setAnnounced(true);
       setCountdown(300);
@@ -3365,7 +3350,6 @@ function AppRestartSection() {
     try {
       await fetch('/api/update/restart-now', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
       });
       toast.success('App wird neu gestartet...');
       setTimeout(() => { localStorage.clear(); window.location.href = '/login'; }, 4000);
@@ -3379,7 +3363,6 @@ function AppRestartSection() {
     try {
       await fetch('/api/update/restart-cancel', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
       });
       toast.success('Neustart abgebrochen');
     } catch {}
@@ -3481,9 +3464,6 @@ function OsUpdateSection() {
   const [checking, setChecking] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [sudoModal, setSudoModal] = useState<{ action: 'check' | 'install' | 'dist' } | null>(null);
-  const [sudoPass, setSudoPass] = useState('');
-  const [sudoUser, setSudoUser] = useState('hwutti');
   const [log, setLog] = useState<string[]>([]);
   const [done, setDone] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -3496,32 +3476,24 @@ function OsUpdateSection() {
     if (distLogRef.current) distLogRef.current.scrollTop = distLogRef.current.scrollHeight;
   }, [distLog]);
 
-  const checkUpdates = async (pass?: string, user?: string) => {
+  const checkUpdates = async () => {
     setChecking(true);
-    setSudoModal(null);
     try {
-      const r = await api.get('/update/os-check', { params: pass ? { sudoPass: pass, sudoUser: user || sudoUser } : {} });
+      const r = await api.get('/update/os-check');
       setOsInfo(r.data);
-      if (pass) setSudoPass(pass);
-      if (user) setSudoUser(user);
     } catch { }
     finally { setChecking(false); }
   };
 
-  const installUpdates = async (pass?: string, user?: string) => {
+  const installUpdates = async () => {
     setShowConfirm(false);
-    setSudoModal(null);
-    const usePass = pass || sudoPass;
-    const useUser = user || sudoUser;
     setInstalling(true);
     setLog([]);
     setDone(false);
     try {
-      await api.post('/update/os-install', { sudoPass: usePass, sudoUser: useUser });
-      // SSE Stream via EventSource mit Token als Query-Parameter
-      const token = localStorage.getItem('token');
+      await api.post('/update/os-install');
       await new Promise<void>((resolve) => {
-        const es = new EventSource(`/api/update/os-log?auth=${encodeURIComponent(token || '')}`);
+        const es = new EventSource('/api/update/os-log');
         es.onmessage = (e) => {
           try {
             const json = JSON.parse(e.data);
@@ -3537,18 +3509,14 @@ function OsUpdateSection() {
     } catch { setInstalling(false); }
   };
 
-  const installDistUpgrade = async (pass?: string, user?: string) => {
-    setSudoModal(null);
+  const installDistUpgrade = async () => {
     setDistInstalling(true);
     setDistLog([]);
     setDistDone(false);
-    const usePass2 = pass || sudoPass;
-    const useUser2 = user || sudoUser;
     try {
-      await api.post('/update/os-dist-upgrade', { sudoPass: usePass2, sudoUser: useUser2 });
-      const token = localStorage.getItem('token');
+      await api.post('/update/os-dist-upgrade');
       await new Promise<void>((resolve) => {
-        const es = new EventSource(`/api/update/os-dist-log?auth=${encodeURIComponent(token || '')}`);
+        const es = new EventSource('/api/update/os-dist-log');
         es.onmessage = (e) => {
           try {
             const json = JSON.parse(e.data);
@@ -3577,23 +3545,10 @@ function OsUpdateSection() {
 
       <div className="card p-5 space-y-4">
         {!osInfo && !installing && (
-          <button onClick={() => setSudoModal({ action: 'check' })} disabled={checking}
+          <button onClick={checkUpdates} disabled={checking}
             className="btn-secondary flex items-center gap-2 w-full justify-center">
             {checking ? <><RefreshCw className="w-4 h-4 animate-spin" /> Wird geprüft...</> : <><RefreshCw className="w-4 h-4" /> Auf Updates prüfen</>}
           </button>
-        )}
-
-        {sudoModal && (
-          <SudoPasswordModal
-            title={sudoModal.action === 'check' ? 'Updates prüfen' : sudoModal.action === 'dist' ? 'Kernel-Update' : 'System-Update'}
-            description="sudo-Passwort des Servers eingeben"
-            onConfirm={(user, pass) => {
-              if (sudoModal.action === 'check') checkUpdates(pass, user);
-              else if (sudoModal.action === 'install') installUpdates(pass, user);
-              else if (sudoModal.action === 'dist') installDistUpgrade(pass, user);
-            }}
-            onCancel={() => setSudoModal(null)}
-          />
         )}
 
         {osInfo && !installing && !done && (
@@ -3627,7 +3582,7 @@ function OsUpdateSection() {
                 <RefreshCw className={`w-4 h-4 ${checking ? 'animate-spin' : ''}`} /> Neu prüfen
               </button>
               {!osInfo.upToDate && (
-                <button onClick={() => setSudoModal({ action: 'install' })} className="btn-primary flex items-center gap-2 flex-1 justify-center">
+                <button onClick={() => setShowConfirm(true)} className="btn-primary flex items-center gap-2 flex-1 justify-center">
                   <Download className="w-4 h-4" /> {osInfo.total} Pakete updaten
                 </button>
               )}
@@ -3644,7 +3599,7 @@ function OsUpdateSection() {
                     <p className="font-semibold text-sm text-amber-900">{osInfo.held} Kernel-Update{osInfo.held !== 1 ? 's' : ''} zurückgehalten</p>
                     <p className="text-xs text-amber-700 mt-0.5">Kernel-Updates benötigen dist-upgrade + Server-Neustart</p>
                   </div>
-                  <button onClick={() => setSudoModal({ action: 'dist' })}
+                  <button onClick={installDistUpgrade}
                     className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-amber-700 text-white hover:bg-amber-800 transition-colors font-medium flex-shrink-0">
                     <Download className="w-3.5 h-3.5" /> Kernel updaten
                   </button>
@@ -3765,7 +3720,7 @@ function OsUpdateSection() {
               <button onClick={() => setShowConfirm(false)} className="btn-secondary flex-1">
                 Abbrechen
               </button>
-              <button onClick={() => installUpdates(sudoPass)} className="btn-primary flex-1 flex items-center justify-center gap-2">
+              <button onClick={installUpdates} className="btn-primary flex-1 flex items-center justify-center gap-2">
                 <Download className="w-4 h-4" /> Jetzt updaten
               </button>
             </div>
@@ -3784,24 +3739,18 @@ function RebootSection() {
   const [confirmed, setConfirmed] = useState(false);
   const [warnedUsers, setWarnedUsers] = useState<number>(0);
   const [log, setLog] = useState<string[]>([]);
-  const [sudoModal, setSudoModal] = useState<false | 'normal' | 'sofort'>(false);
-  const [sudoPass, setSudoPass] = useState('');
-  const [sudoUser, setSudoUser] = useState('hwutti');
   const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [log]);
 
-  const startReboot = async (immediateCountdown?: number, pass?: string, user?: string) => {
+  const startReboot = async (immediateCountdown?: number) => {
     const actualCountdown = immediateCountdown ?? countdown;
-    const usePass = pass || sudoPass;
-    const useUser = user || sudoUser;
-    setSudoModal(false);
     setRebooting(true);
     setLog([]);
     try {
-      const r = await api.post('/update/reboot', { countdown: actualCountdown, sudoPass: usePass, sudoUser: useUser });
+      const r = await api.post('/update/reboot', { countdown: actualCountdown });
       const warned = r.data.warned || 0;
       setWarnedUsers(warned);
       setLog([
@@ -3902,27 +3851,15 @@ function RebootSection() {
             </div>
             <div className="flex gap-2 pt-2 flex-wrap">
               <button onClick={() => setConfirmed(false)} className="btn-secondary flex-1">Abbrechen</button>
-              <button onClick={() => setSudoModal('normal')}
+              <button onClick={() => startReboot(countdown)}
                 className="btn-danger flex items-center gap-2 flex-1 justify-center">
                 <Power className="w-4 h-4" /> In {countdown < 60 ? countdown + 's' : countdown/60 + ' Min'} neu starten
               </button>
-              <button onClick={() => setSudoModal('sofort')}
+              <button onClick={() => startReboot(0)}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-red-400 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors">
                 <Power className="w-4 h-4" /> Sofort
               </button>
             </div>
-
-            {sudoModal && (
-              <SudoPasswordModal
-                title={sudoModal === 'sofort' ? 'Sofort neu starten' : 'Server neu starten'}
-                description="sudo-Passwort des Servers eingeben um den Neustart zu bestätigen"
-                onConfirm={(user, pass) => {
-                  setSudoPass(pass); setSudoUser(user);
-                  startReboot(sudoModal === 'sofort' ? 0 : countdown, pass, user);
-                }}
-                onCancel={() => setSudoModal(false)}
-              />
-            )}
           </div>
         )}
 
@@ -5018,8 +4955,7 @@ function AiSection() {
     setOllamaPullDone(false);
     setOllamaPullPercent(null);
     try {
-      const token = localStorage.getItem('token');
-      const es = new EventSource(`/api/settings/ollama-pull-stream?model=${encodeURIComponent(ollamaModel)}&auth=${encodeURIComponent(token || '')}`);
+      const es = new EventSource(`/api/settings/ollama-pull-stream?model=${encodeURIComponent(ollamaModel)}`);
 
       es.onmessage = (e) => {
         try {
@@ -5090,11 +5026,11 @@ function AiSection() {
     try {
       // Stream-Endpunkt testen — nach erstem Token sofort abbrechen
       const controller = new AbortController();
-      const token = localStorage.getItem('token');
       const baseUrl = (import.meta.env.VITE_API_URL || '').replace(/\/api$/, '');
       const res = await fetch(`${baseUrl}/api/ai/jahresbericht/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ year: new Date().getFullYear(), sectionKey: 'vorwort', instruction: 'Test', currentText: '',
           stats: { activeMembers: 5, youthMembers: 0, reserveMembers: 0, honorMembers: 0,
             newMembers: 0, totalIncidents: 1, fireIncidents: 1, technicalIncidents: 0,

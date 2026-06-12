@@ -107,7 +107,6 @@ export default function MeinProfilPage() {
   const [active, setActive] = useState<Tab>('profil');
   const [member, setMember] = useState<any>(null);
   const [loadingMember, setLoadingMember] = useState(true);
-  const token = localStorage.getItem('token') || '';
 
   // Kontakt-Formular
   const [kontakt, setKontakt] = useState({ phone: '', email: '', street: '', zipCode: '', city: '' });
@@ -159,7 +158,7 @@ export default function MeinProfilPage() {
     setUploading(true);
     try {
       const result = await userApi.uploadAvatar(file);
-      login(token, result.user ? result.user : { ...user, avatarUrl: result.avatarUrl });
+      login(result.user ? result.user : { ...user, avatarUrl: result.avatarUrl });
       toast.success('Profilfoto aktualisiert');
     } catch { toast.error('Fehler beim Upload'); }
     finally { setUploading(false); if (e.target) e.target.value = ''; }
@@ -168,7 +167,7 @@ export default function MeinProfilPage() {
   const handleAvatarRemove = async () => {
     try {
       const result = await userApi.deleteAvatar();
-      login(token, result.user ? result.user : { ...user, avatarUrl: null });
+      login(result.user ? result.user : { ...user, avatarUrl: null });
       toast.success('Profilfoto entfernt');
     } catch { toast.error('Fehler'); }
   };
@@ -198,7 +197,7 @@ export default function MeinProfilPage() {
   };
 
   // 2FA
-  const refreshUser = async () => { const me = await authApi.me(); login(token, me); };
+  const refreshUser = async () => { const me = await authApi.me(); login(me); };
   const start2fa = async () => {
     setTfLoading(true);
     try { const d = await authApi.setup2fa(); setQrCode(d.qrCode); setSecret(d.secret); setTwoFaStep('qr'); }

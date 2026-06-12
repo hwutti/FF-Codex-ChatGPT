@@ -46,9 +46,7 @@ export default function ProtocolDetailPage() {
         setForm({ title: p.title, date: p.date?.slice(0, 10) || '', eventId: p.eventId || '', author: p.author || '', notes: p.notes || '' });
         setEvents(Array.isArray(e) ? e : (e.events || []));
         if (p.mimeType === 'application/pdf') {
-          const token = localStorage.getItem('token');
           fetch(`/api/protocols/${id}/download`, {
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
             credentials: 'include'
           }).then(r => r.blob()).then(blob => { setPdfUrl(URL.createObjectURL(blob)); });
         }

@@ -82,12 +82,9 @@ export default function EinsatzNavigationWidget({ nextEventLocation = '' }) {
 
   // Schnellwahl aus DB laden
   useEffect(() => {
-    const token = localStorage.getItem('token');
     const viteUrl = import.meta.env.VITE_API_URL || '';
     const baseUrl = viteUrl.endsWith('/api') ? viteUrl.slice(0, -4) : viteUrl;
-    fetch(baseUrl + '/api/settings/nav-quick-places', {
-      headers: token ? { Authorization: 'Bearer ' + token } : {},
-    })
+    fetch(baseUrl + '/api/settings/nav-quick-places', { credentials: 'include' })
       .then(r => r.json())
       .then(data => { if (Array.isArray(data) && data.length > 0) setQuickPlaces(data); })
       .catch(() => {});
@@ -95,13 +92,10 @@ export default function EinsatzNavigationWidget({ nextEventLocation = '' }) {
 
   // Nächste 3 Übungen laden
   useEffect(() => {
-    const token = localStorage.getItem('token');
     const viteUrl = import.meta.env.VITE_API_URL || '';
     const baseUrl = viteUrl.endsWith('/api') ? viteUrl.slice(0, -4) : viteUrl;
     const today = new Date().toISOString().split('T')[0];
-    fetch(baseUrl + '/api/exercises?from=' + today + '&limit=3', {
-      headers: token ? { Authorization: 'Bearer ' + token } : {},
-    })
+    fetch(baseUrl + '/api/exercises?from=' + today + '&limit=3', { credentials: 'include' })
       .then(r => r.json())
       .then(data => {
         const list = Array.isArray(data.exercises) ? data.exercises : [];
@@ -200,11 +194,10 @@ export default function EinsatzNavigationWidget({ nextEventLocation = '' }) {
         const ext = mimeType.includes('webm') ? 'webm' : 'ogg';
         const form = new FormData();
         form.append('audio', blob, 'recording.' + ext);
-        const token = localStorage.getItem('token');
         try {
           const res = await fetch('/api/whisper/transcribe', {
             method: 'POST',
-            headers: token ? { Authorization: 'Bearer ' + token } : {},
+            credentials: 'include',
             body: form,
           });
           if (!res.ok) throw new Error((await res.json()).error);

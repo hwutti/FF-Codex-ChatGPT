@@ -1,5 +1,6 @@
 import * as nodemailer from 'nodemailer';
 import { prisma } from '../config/database';
+import { decryptSecret } from './crypto';
 
 export interface SmtpConfig {
   host: string;
@@ -24,7 +25,7 @@ export async function getSmtpConfig(): Promise<SmtpConfig | null> {
       port: settings.smtpPort || 587,
       secure: settings.smtpSecure || false,
       user: settings.smtpUser,
-      pass: settings.smtpPass,
+      pass: decryptSecret(settings.smtpPass),
       from: settings.smtpFrom || settings.smtpUser,
     };
   } catch {

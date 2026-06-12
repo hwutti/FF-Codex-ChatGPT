@@ -215,7 +215,6 @@ router.post('/login', async (req: Request, res: Response) => {
     });
 
     res.json({
-      token, // Auch im Body für Rückwärtskompatibilität
       user: { id: user.id, email: user.email, role: user.role, memberId: user.memberId, member: user.member, twoFactorEnabled: user.twoFactorEnabled, avatarUrl: user.avatarUrl },
     });
   } catch (error) {

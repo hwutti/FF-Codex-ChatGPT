@@ -24,7 +24,6 @@ export function useInvKiGenerate({
     invKiAbortRef.current?.abort();
     const controller = new AbortController();
     invKiAbortRef.current = controller;
-    const token = localStorage.getItem('token');
     const viteApiUrl = import.meta.env.VITE_API_URL || '';
     const apiSuffix = 'api';
     const baseUrl = viteApiUrl.endsWith(apiSuffix) ? viteApiUrl.slice(0, -(apiSuffix.length + 1)) : viteApiUrl;
@@ -41,7 +40,7 @@ export function useInvKiGenerate({
     try {
       const res = await fetch(baseUrl + '/api/letter/generate/stream', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: contextHint ? contextHint + ' ' + invKiPromptVal : invKiPromptVal,
           currentText: isPartial ? introText : '',

@@ -3,6 +3,7 @@ import { authenticate } from '../middleware/auth.middleware';
 import { requirePermission } from './permissions.routes';
 import { env } from '../config/env';
 import { trackAiUsage } from '../utils/aiUsage';
+import { decryptSecret } from '../utils/crypto';
 
 const router = Router();
 router.use(authenticate);
@@ -38,9 +39,9 @@ async function getProviderConfig(): Promise<{ key: string; provider: string; oll
     await prisma.$disconnect();
 
     const activeProvider = settings?.activeAiProvider || 'gemini';
-    const geminiKey   = settings?.geminiApiKey  || env.GEMINI_API_KEY || '';
-    const groqKey     = settings?.groqApiKey    || env.GROQ_API_KEY   || '';
-    const openaiKey   = settings?.openaiApiKey  || '';
+    const geminiKey   = decryptSecret(settings?.geminiApiKey) || env.GEMINI_API_KEY || '';
+    const groqKey     = decryptSecret(settings?.groqApiKey)   || env.GROQ_API_KEY   || '';
+    const openaiKey   = decryptSecret(settings?.openaiApiKey) || '';
     const ollamaUrl   = settings?.ollamaUrl     || 'http://localhost:11434';
     const ollamaModel = settings?.ollamaModel   || 'gemma2:2b';
 

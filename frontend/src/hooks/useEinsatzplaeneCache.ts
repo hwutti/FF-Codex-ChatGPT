@@ -113,9 +113,8 @@ export function useEinsatzplaeneCache(enabled = true) {
             }
 
             // fetch() direkt verwenden – api hat baseURL '/api', würde /api/uploads/... machen
-            const token = localStorage.getItem('token');
             const response = await fetch(absoluteUrl, {
-              headers: token ? { Authorization: `Bearer ${token}` } : {},
+              credentials: 'include',
             });
             if (!response.ok) { errors++; continue; }
             const blob = await response.blob();

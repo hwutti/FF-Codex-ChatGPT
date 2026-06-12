@@ -90,10 +90,9 @@ export default function DiktatButton({ onResult, className = '' }: DiktatButtonP
       const ext = mimeType.includes('webm') ? 'webm' : 'ogg';
       const form = new FormData();
       form.append('audio', blob, `recording.${ext}`);
-      const token = localStorage.getItem('token');
       const res = await fetch('/api/whisper/transcribe', {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
         body: form,
       });
       if (!res.ok) throw new Error((await res.json()).error);

@@ -797,13 +797,13 @@ export default function SchriftverkehrPage() {
     kiAbortRef.current?.abort();
     const controller = new AbortController();
     kiAbortRef.current = controller;
-    const token = localStorage.getItem('token');
     const viteUrl = import.meta.env.VITE_API_URL || ''; const baseUrl = viteUrl.endsWith('/api') ? viteUrl.slice(0, -4) : viteUrl;
     const isPartial = !!(body && instruction);
     try {
       const res = await fetch(`${baseUrl}/api/letter/generate/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ prompt, recipientName, subject, currentText: isPartial ? body : '', instruction: isPartial ? instruction : '' }),
         signal: controller.signal,
       });

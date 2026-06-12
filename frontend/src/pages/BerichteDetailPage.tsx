@@ -47,9 +47,7 @@ export default function BerichteDetailPage() {
       setForm({ title: p.title, date: p.date?.slice(0, 10) || '', author: p.author || '', notes: cleanNotes });
       // PDF laden
       if (p.mimeType === 'application/pdf') {
-        const token = localStorage.getItem('token');
         fetch(`/api/protocols/${id}/download`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
           credentials: 'include'
         })
           .then(r => r.blob())

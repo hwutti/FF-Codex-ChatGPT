@@ -53,10 +53,9 @@ async function uploadFile(file: File, title: string, description: string, folder
   form.append('title', title || file.name.replace(/\.[^.]+$/, ''));
   form.append('description', description);
   if (folderId) form.append('folderId', folderId);
-  const token = localStorage.getItem('token');
   const res = await fetch('/api/einsatzplaene', {
     method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: 'include',
     body: form,
   });
   if (!res.ok) throw new Error('Upload fehlgeschlagen');

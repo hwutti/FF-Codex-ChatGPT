@@ -4,7 +4,7 @@ import { authApi } from '../api';
 interface AuthContextType {
   user: any;
   token: string | null;
-  login: (token: string, user: any) => void;
+  login: (userOrToken: any, maybeUser?: any) => void;
   logout: () => void;
   isLoading: boolean;
 }
@@ -29,15 +29,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    const savedToken = localStorage.getItem('token');
     const savedUser  = localStorage.getItem('user');
-
-    if (!savedToken) {
-      setIsLoading(false);
-      return;
-    }
-
-    setToken(savedToken);
 
     // Gecachten User sofort einsetzen → App startet auch offline
     if (savedUser) {
@@ -69,10 +61,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => window.removeEventListener('auth:logout', handler);
   }, []);
 
-  const login = (newToken: string, userData: any) => {
-    setToken(newToken);
+  const login = (userOrToken: any, maybeUser?: any) => {
+    const userData = maybeUser || userOrToken;
+    setToken(null);
     setUser(userData);
-    localStorage.setItem('token', newToken);
+    localStorage.removeItem('token');
     localStorage.setItem('user', JSON.stringify(userData)); // für Offline-Fallback cachen
   };
 

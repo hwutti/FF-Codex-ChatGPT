@@ -127,14 +127,14 @@ export default function JahresberichtPage() {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-    const token = localStorage.getItem('token');
     const url = `${getBaseUrl()}/api/ai/jahresbericht/stream`;
 
     let response: Response;
     try {
       response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(body),
         signal: controller.signal,
       });

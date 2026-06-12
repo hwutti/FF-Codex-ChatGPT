@@ -11,6 +11,7 @@ import puppeteer from 'puppeteer';
 import crypto from 'crypto';
 import { syncOrgEventToCalendar } from '../utils/calendarSync';
 import sharp from 'sharp';
+import { decryptSecret } from '../utils/crypto';
 
 // Unterschrift für Email verkleinern (max 120px hoch)
 async function resizeSignatureForEmail(base64DataUrl: string): Promise<string> {
@@ -776,7 +777,7 @@ async function getTransporter() {
     host: settings.smtpHost,
     port: settings.smtpPort || 587,
     secure: settings.smtpPort === 465,
-    auth: { user: settings.smtpUser, pass: settings.smtpPass },
+    auth: { user: settings.smtpUser, pass: decryptSecret(settings.smtpPass) },
   });
 }
 
@@ -1780,9 +1781,9 @@ router.post('/generate/stream', requirePermission('schriftverkehr', 'CREATE'), a
     const settings = await prisma2.appSettings.findUnique({ where: { id: 'singleton' } }) as any;
     await prisma2.$disconnect();
     provider = settings?.activeAiProvider || 'gemini';
-    apiKey = provider === 'gemini' ? (settings?.geminiApiKey || env.GEMINI_API_KEY || '')
-           : provider === 'groq'   ? (settings?.groqApiKey   || env.GROQ_API_KEY   || '')
-           : provider === 'openai' ? (settings?.openaiApiKey || '')
+    apiKey = provider === 'gemini' ? (decryptSecret(settings?.geminiApiKey) || env.GEMINI_API_KEY || '')
+           : provider === 'groq'   ? (decryptSecret(settings?.groqApiKey)   || env.GROQ_API_KEY   || '')
+           : provider === 'openai' ? (decryptSecret(settings?.openaiApiKey) || '')
            : (settings?.ollamaUrl || 'http://localhost:11434');
     ollamaUrl  = settings?.ollamaUrl   || 'http://localhost:11434';
     ollamaModel = settings?.ollamaModel || 'gemma2:2b';
@@ -3656,7 +3657,7 @@ router.post('/training-plans/send', requirePermission('schriftverkehr', 'CREATE'
     const transporter = nodemailer.createTransport({
       host: settings.smtpHost, port: settings.smtpPort || 587,
       secure: (settings.smtpPort || 587) === 465,
-      auth: { user: settings.smtpUser, pass: settings.smtpPass },
+      auth: { user: settings.smtpUser, pass: decryptSecret(settings.smtpPass) },
     });
 
     const parsedRecipients: { name: string; email: string }[] =
@@ -4093,7 +4094,7 @@ router.post('/schulungsplaene/send', requirePermission('schriftverkehr', 'CREATE
     const transporter = nodemailer.createTransport({
       host: settings.smtpHost, port: settings.smtpPort || 587,
       secure: (settings.smtpPort || 587) === 465,
-      auth: { user: settings.smtpUser, pass: settings.smtpPass },
+      auth: { user: settings.smtpUser, pass: decryptSecret(settings.smtpPass) },
     });
 
     const parsedRecipients: { name: string; email: string }[] =
@@ -4337,7 +4338,7 @@ async function executeScheduledJob(job: any): Promise<{ sent: number; failed: nu
   const transporter = nodemailer.createTransport({
     host: settings.smtpHost, port: settings.smtpPort || 587,
     secure: (settings.smtpPort || 587) === 465,
-    auth: { user: settings.smtpUser, pass: settings.smtpPass },
+    auth: { user: settings.smtpUser, pass: decryptSecret(settings.smtpPass) },
   });
   const parsedRecipients: { name: string; email: string }[] =
     typeof payload.recipients === 'string' ? (() => { try { return JSON.parse(payload.recipients); } catch { return []; } })() : (payload.recipients || []);

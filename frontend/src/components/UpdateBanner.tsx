@@ -41,10 +41,8 @@ export default function UpdateBanner() {
   const startPolling = () => {
     if (pollRef.current) return;
     pollRef.current = setInterval(async () => {
-      const token = localStorage.getItem('token');
-      if (!token) return;
       try {
-        const res = await fetch('/api/update/announce-status', { headers: { Authorization: `Bearer ${token}` } });
+        const res = await fetch('/api/update/announce-status');
         const data = await res.json();
         if (data.announced) {
           const elapsed = Math.floor((Date.now() - new Date(data.startedAt).getTime()) / 1000);
@@ -52,7 +50,7 @@ export default function UpdateBanner() {
           if (remaining > 0) startCountdown(remaining, 'update');
         } else {
           // Restart prüfen
-          const res2 = await fetch('/api/update/restart-announce-status', { headers: { Authorization: `Bearer ${token}` } });
+          const res2 = await fetch('/api/update/restart-announce-status');
           const data2 = await res2.json();
           if (data2.announced) {
             const elapsed = Math.floor((Date.now() - new Date(data2.startedAt).getTime()) / 1000);
@@ -71,11 +69,7 @@ export default function UpdateBanner() {
     if (!isAdmin) return;
 
     // Sofort beim Mount prüfen
-    const token = localStorage.getItem('token');
-    if (token) {
-      fetch('/api/update/announce-status', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+    fetch('/api/update/announce-status')
         .then(r => r.json())
         .then(data => {
           if (data.announced) {
@@ -85,7 +79,6 @@ export default function UpdateBanner() {
           }
         })
         .catch(() => {});
-    }
 
     // Polling starten (5 Sek Intervall) — fängt alle Fälle ab
     startPolling();

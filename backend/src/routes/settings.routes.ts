@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { encrypt, decrypt, maskToken } from '../utils/crypto';
+import { encrypt, decrypt, maskToken, maskSecret, prepareSecretForStorage, decryptSecret } from '../utils/crypto';
 import { prisma } from '../config/database';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import multer from 'multer';
@@ -92,6 +92,21 @@ setInterval(sampleCpu, 60000);
 
 const router = Router();
 
+function publicSettings(settings: any) {
+  const safe = { ...settings };
+  delete safe.githubToken;
+  delete safe.smtpPass;
+  return {
+    ...safe,
+    geminiApiKey: maskSecret(settings?.geminiApiKey),
+    groqApiKey: maskSecret(settings?.groqApiKey),
+    openaiApiKey: maskSecret(settings?.openaiApiKey),
+    hasGeminiApiKey: !!decryptSecret(settings?.geminiApiKey),
+    hasGroqApiKey: !!decryptSecret(settings?.groqApiKey),
+    hasOpenaiApiKey: !!decryptSecret(settings?.openaiApiKey),
+  };
+}
+
 // Logo upload storage
 const logoStorage = multer.diskStorage({
   destination: (_req, _file, cb) => {
@@ -120,7 +135,7 @@ router.get('/', async (_req: Request, res: Response) => {
     if (!settings) {
       settings = await prisma.appSettings.create({ data: { id: 'singleton' } });
     }
-    res.json(settings);
+    res.json(publicSettings(settings));
   } catch (err) {
     res.status(500).json({ error: 'Fehler' });
   }
@@ -138,7 +153,7 @@ router.put('/', authenticate, authorize('ADMIN'), async (req: Request, res: Resp
       create: { id: 'singleton', name, subtitle, foundedYear, primaryColor, loginTitle, loginSubtitle, loginColor, loginBadge, loginWelcomeTitle, loginWelcomeSubtitle, loginBgColor,
                 fontGeneral, fontHeadings, fontLogin, fontSidebar, fontDashboard, fontPrivacy } as any,
     });
-    res.json(settings);
+    res.json(publicSettings(settings));
   } catch (err) {
     res.status(500).json({ error: 'Fehler beim Speichern' });
   }
@@ -234,10 +249,12 @@ router.delete('/login-bg', authenticate, authorize('ADMIN'), async (_req, res: R
 router.post('/gemini-key', authenticate, authorize('ADMIN'), async (req: Request, res: Response) => {
   try {
     const { geminiApiKey } = req.body;
+    const current = await prisma.appSettings.findUnique({ where: { id: 'singleton' } }) as any;
+    const storedKey = prepareSecretForStorage(geminiApiKey, current?.geminiApiKey);
     await prisma.appSettings.upsert({
       where: { id: 'singleton' },
-      update: { geminiApiKey: geminiApiKey || null },
-      create: { id: 'singleton', geminiApiKey: geminiApiKey || null },
+      update: { geminiApiKey: storedKey },
+      create: { id: 'singleton', geminiApiKey: storedKey },
     });
     res.json({ success: true });
   } catch {
@@ -485,10 +502,12 @@ router.post('/radar', authenticate, authorize('ADMIN'), async (req: Request, res
 router.post('/groq-key', authenticate, authorize('ADMIN'), async (req: Request, res: Response) => {
   try {
     const { groqApiKey } = req.body;
+    const current = await prisma.appSettings.findUnique({ where: { id: 'singleton' } }) as any;
+    const storedKey = prepareSecretForStorage(groqApiKey, current?.groqApiKey);
     await prisma.appSettings.upsert({
       where: { id: 'singleton' },
-      update: { groqApiKey: groqApiKey || null },
-      create: { id: 'singleton', groqApiKey: groqApiKey || null },
+      update: { groqApiKey: storedKey },
+      create: { id: 'singleton', groqApiKey: storedKey },
     });
     res.json({ success: true });
   } catch {
@@ -500,10 +519,12 @@ router.post('/groq-key', authenticate, authorize('ADMIN'), async (req: Request, 
 router.post('/openai-key', authenticate, authorize('ADMIN'), async (req: Request, res: Response) => {
   try {
     const { openaiApiKey } = req.body;
+    const current = await prisma.appSettings.findUnique({ where: { id: 'singleton' } }) as any;
+    const storedKey = prepareSecretForStorage(openaiApiKey, current?.openaiApiKey);
     await prisma.appSettings.upsert({
       where: { id: 'singleton' },
-      update: { openaiApiKey: openaiApiKey || null } as any,
-      create: { id: 'singleton', openaiApiKey: openaiApiKey || null } as any,
+      update: { openaiApiKey: storedKey } as any,
+      create: { id: 'singleton', openaiApiKey: storedKey } as any,
     });
     res.json({ success: true });
   } catch {
@@ -643,25 +664,6 @@ router.post('/github-test', authenticate, authorize('ADMIN'), async (_req: Reque
   }
 });
 
-// ── GET /api/settings/github-token-raw (intern für fw-update) ────────
-// Gibt den entschlüsselten Token zurück — NUR von localhost erreichbar
-router.get('/github-token-raw', async (req: Request, res: Response) => {
-  const ip = req.ip || req.socket.remoteAddress || '';
-  if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(ip)) {
-    return res.status(403).json({ error: 'Nur von localhost erlaubt' });
-  }
-  try {
-    const s = await (prisma as any).appSettings.findUnique({ where: { id: 'singleton' } });
-    if (!s?.githubToken || !s?.githubRepo) {
-      return res.status(404).json({ error: 'Kein Token konfiguriert' });
-    }
-    const token = decrypt(s.githubToken);
-    res.json({ token, repo: s.githubRepo });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
 // POST /api/settings/ollama-url — Ollama URL + Modell speichern
 router.post('/ollama-url', authenticate, authorize('ADMIN'), async (req: Request, res: Response) => {
   try {
@@ -796,7 +798,7 @@ router.get('/smtp', authenticate, authorize('ADMIN'), async (_req: Request, res:
       smtpHost: settings?.smtpHost || '',
       smtpPort: settings?.smtpPort || 587,
       smtpUser: settings?.smtpUser || '',
-      smtpPass: settings?.smtpPass ? '••••••••' : '',
+      smtpPass: maskSecret(settings?.smtpPass),
       smtpFrom: settings?.smtpFrom || '',
       smtpSecure: settings?.smtpSecure || false,
       configured: !!(settings?.smtpHost && settings?.smtpUser && settings?.smtpPass),
@@ -810,7 +812,7 @@ router.put('/smtp', authenticate, authorize('ADMIN'), async (req: Request, res: 
     const { smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom, smtpSecure } = req.body;
     // Passwort nur updaten wenn nicht Placeholder
     const current = await prisma.appSettings.findUnique({ where: { id: 'singleton' } }) as any;
-    const pass = smtpPass && smtpPass !== '••••••••' ? smtpPass : (current?.smtpPass || null);
+    const pass = prepareSecretForStorage(smtpPass, current?.smtpPass);
 
     await prisma.appSettings.upsert({
       where: { id: 'singleton' },
@@ -827,9 +829,11 @@ router.post('/smtp-test', authenticate, authorize('ADMIN'), async (req: Request,
   let { smtpPass } = req.body;
 
   // Wenn Frontend die maskierten Punkte schickt → echtes Passwort aus DB laden
-  if (!smtpPass || smtpPass === '••••••••') {
+  if (!smtpPass || String(smtpPass).includes('****') || String(smtpPass).includes('•')) {
     const current = await (prisma.appSettings as any).findUnique({ where: { id: 'singleton' } });
-    smtpPass = current?.smtpPass || '';
+    smtpPass = decryptSecret(current?.smtpPass);
+  } else {
+    smtpPass = decryptSecret(smtpPass);
   }
 
   res.setHeader('Content-Type', 'text/event-stream');
@@ -1667,19 +1671,7 @@ router.get('/ollama-pull-status', authenticate, authorize('ADMIN'), (req: Reques
 });
 
 // GET /api/settings/ollama-pull-stream — Live SSE Stream für Ollama Pull
-router.get('/ollama-pull-stream', async (req: Request, res: Response) => {
-  // Auth via Query-Parameter (EventSource kann keine Header senden)
-  if (req.query.auth && !req.headers.authorization) {
-    req.headers.authorization = `Bearer ${req.query.auth}`;
-  }
-  try {
-    const jwt = require('jsonwebtoken');
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token) { res.status(401).end(); return; }
-    const payload = jwt.verify(token, process.env.JWT_SECRET) as any;
-    if (payload.role !== 'ADMIN') { res.status(403).end(); return; }
-  } catch { res.status(401).end(); return; }
-
+router.get('/ollama-pull-stream', authenticate, authorize('ADMIN'), async (req: Request, res: Response) => {
   const model = req.query.model as string;
   if (!model) { res.status(400).json({ error: 'Kein Modell angegeben' }); return; }
 
